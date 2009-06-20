@@ -104,6 +104,7 @@ import org.sunflow.core.shader.ViewIrradianceShader;
 import org.sunflow.core.shader.WireframeShader;
 import org.sunflow.core.tesselatable.BezierMesh;
 import org.sunflow.core.tesselatable.FileMesh;
+import org.sunflow.core.tesselatable.ColladaGeometry;
 import org.sunflow.core.tesselatable.Gumbo;
 import org.sunflow.core.tesselatable.Teapot;
 import org.sunflow.image.BitmapReader;
@@ -170,6 +171,7 @@ public final class PluginRegistry {
         // tesslatable
         tesselatablePlugins.registerPlugin("bezier_mesh", BezierMesh.class);
         tesselatablePlugins.registerPlugin("file_mesh", FileMesh.class);
+        tesselatablePlugins.registerPlugin("collada_geometry", ColladaGeometry.class);
         tesselatablePlugins.registerPlugin("gumbo", Gumbo.class);
         tesselatablePlugins.registerPlugin("teapot", Teapot.class);
     }

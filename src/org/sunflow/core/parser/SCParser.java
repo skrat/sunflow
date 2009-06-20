@@ -914,6 +914,13 @@ public class SCParser implements SceneParser {
             if (p.peekNextToken("smooth_normals"))
                 api.parameter("smooth_normals", p.getNextBoolean());
             api.geometry(name, "file_mesh");
+        } else if (type.equals("collada")) {
+            UI.printInfo(Module.API, "Reading COLLADA mesh: %s ... ", name);
+            p.checkNextToken("filename");
+            api.parameter("filename", p.getNextToken());
+            p.checkNextToken("id");
+            api.parameter("id", p.getNextToken());
+            api.geometry(name, "collada_geometry");
         } else if (type.equals("bezier-mesh")) {
             UI.printInfo(Module.API, "Reading bezier mesh: %s ... ", name);
             p.checkNextToken("n");
