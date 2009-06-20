@@ -1,20 +1,12 @@
 package org.sunflow.core.tesselatable;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
-import java.io.DataInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
-import java.nio.ByteOrder;
-import java.nio.FloatBuffer;
-import java.nio.IntBuffer;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import org.xml.sax.SAXException;
 import org.w3c.dom.Document;
 
 import org.sunflow.SunflowAPI;
@@ -49,41 +41,40 @@ public class ColladaGeometry implements Tesselatable {
     public PrimitiveList tesselate() {
         UI.printInfo(Module.GEOM, "COLLADA - Reading geometry: \"%s\" ...", filename);
         Resources r = Resources.getInstance();
-        Document doc = null;
+        Document dae = null;
 
         if ( r.contains( (Object) filename) ) {
             UI.printInfo(Module.GEOM, "COLLADA - Cached resource: \"%s\" ...", filename);
-            doc = (Document) r.get( (Object) filename);
+            dae = (Document) r.get( (Object) filename);
         } else {
             try {
-                DocumentBuilder b = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-                doc = b.parse(filename);
-            } catch(javax.xml.parsers.ParserConfigurationException e) {
+                DocumentBuilder parser = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+                dae = parser.parse(new File(filename));
+                r.store( (Object) filename, dae);
+            } catch(ParserConfigurationException e) {
                 e.printStackTrace();
-                UI.printError(Module.GEOM, "Unable to read mesh file \"%s\" - parser error", filename);
-            } catch(org.xml.sax.SAXException e) {
+                UI.printError(Module.GEOM, "COLLADA - Unable to read mesh file \"%s\" - parser error", filename);
+            } catch(SAXException e) {
                 e.printStackTrace();
-                UI.printError(Module.GEOM, "Unable to read mesh file \"%s\" - parser error", filename);
+                UI.printError(Module.GEOM, "COLLADA - Unable to read mesh file \"%s\" - parser error", filename);
             } catch(IOException e) {
                 e.printStackTrace();
-                UI.printError(Module.GEOM, "Unable to read mesh file \"%s\" - file error", filename);
+                UI.printError(Module.GEOM, "COLLADA - Unable to read mesh file \"%s\" - IO error", filename);
             }
-
-            r.store( (Object) filename, doc);
         }
 
-        if ( doc == null ) {
+        if ( dae == null ) {
             return null;
         }
 
-        FloatArray verts = ColladaDocument.getGeometryPoints(doc, xmlId);
-        IntArray tris = ColladaDocument.getGeometryTriangles(doc, xmlId);
+        float[] verts = ColladaDocument.getGeometryPoints(dae, xmlId).trim();
+        int[] tris = ColladaDocument.getGeometryTriangles(dae, xmlId).trim();
 
         TriangleMesh m = new TriangleMesh();
         ParameterList pl = new ParameterList();
 
-        pl.addIntegerArray("triangles", tris.trim());
-        pl.addPoints("points", InterpolationType.VERTEX, verts.trim());
+        pl.addPoints("points", InterpolationType.VERTEX, verts);
+        pl.addIntegerArray("triangles", tris);
 
         if (m.update(pl, null))
             return m;
