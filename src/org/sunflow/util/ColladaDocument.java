@@ -13,6 +13,8 @@ import org.sunflow.util.IntArray;
 
 public class ColladaDocument {
 
+    private Document dae;
+
     private static XPath xpath = XPathFactory.newInstance().newXPath();
 
     public static FloatArray getGeometryPoints(Document dae, String id) {
