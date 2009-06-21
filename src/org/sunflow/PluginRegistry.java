@@ -57,6 +57,7 @@ import org.sunflow.core.parser.SCAsciiParser;
 import org.sunflow.core.parser.SCBinaryParser;
 import org.sunflow.core.parser.SCParser;
 import org.sunflow.core.parser.ShaveRibParser;
+import org.sunflow.core.parser.DAEParser;
 import org.sunflow.core.photonmap.CausticPhotonMap;
 import org.sunflow.core.photonmap.GlobalPhotonMap;
 import org.sunflow.core.photonmap.GridPhotonMap;
@@ -301,6 +302,7 @@ public final class PluginRegistry {
         parserPlugins.registerPlugin("rib", ShaveRibParser.class);
         parserPlugins.registerPlugin("ra2", RA2Parser.class);
         parserPlugins.registerPlugin("ra3", RA3Parser.class);
+        parserPlugins.registerPlugin("dae", DAEParser.class);
     }
 
     static {

@@ -16,7 +16,6 @@ public class ColladaDocument {
     private static XPath xpath = XPathFactory.newInstance().newXPath();
 
     public static FloatArray getGeometryPoints(Document dae, String id) {
-        // TODO: fix unsafe vertices order
         try {
             Element trianglesInput = (Element) xpath.evaluate( "/COLLADA/library_geometries/geometry[@id='"+id+"']/mesh/triangles/input", dae, XPathConstants.NODE);
             Element verticesInput = (Element) xpath.evaluate( "/COLLADA/library_geometries/geometry[@id='"+id+"']/mesh/vertices[@id='"+trianglesInput.getAttribute("source").substring(1)+"']/input", dae, XPathConstants.NODE);
