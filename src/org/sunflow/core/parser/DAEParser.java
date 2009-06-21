@@ -48,6 +48,7 @@ public class DAEParser implements SceneParser {
             setImage();
             setBackground();
             setGI();
+            setTrace();
             setCamera();
 
         } catch(ParserConfigurationException e) {
@@ -278,6 +279,30 @@ public class DAEParser implements SceneParser {
         } catch(XPathExpressionException e) {
             api.parameter("gi.engine", "none");
         }
+        api.options(SunflowAPI.DEFAULT_OPTIONS);
+    }
+
+    private void setTrace() {
+        try {
+            String diff = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/trace_depths/diffuse/text()", dae);
+            if (diff != "") {
+                api.parameter("depths.diffuse", Integer.parseInt(diff.trim()));
+            }
+        } catch(XPathExpressionException e) { }
+
+        try {
+            String refl = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/trace_depths/reflection/text()", dae);
+            if (refl != "") {
+                api.parameter("depths.reflection", Integer.parseInt(refl.trim()));
+            }
+        } catch(XPathExpressionException e) { }
+
+        try {
+            String refr = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/trace_depths/refraction/text()", dae);
+            if (refr != "") {
+                api.parameter("depths.refraction", Integer.parseInt(refr.trim()));
+            }
+        } catch(XPathExpressionException e) { }
         api.options(SunflowAPI.DEFAULT_OPTIONS);
     }
 
