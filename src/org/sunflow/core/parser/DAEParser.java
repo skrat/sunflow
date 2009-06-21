@@ -51,6 +51,8 @@ public class DAEParser implements SceneParser {
             setTrace();
             setCamera();
 
+            loadGeometries();
+
         } catch(ParserConfigurationException e) {
             e.printStackTrace();
         } catch(SAXException e) {
@@ -355,9 +357,51 @@ public class DAEParser implements SceneParser {
             api.parameter("camera", cameraId);
             api.options(SunflowAPI.DEFAULT_OPTIONS);
 
-        } catch(XPathExpressionException e) {
-            e.printStackTrace();
-        }
+        } catch(XPathExpressionException e) { }
+    }
+
+    private void loadGeometries() {
+        try {
+            NodeList geometries = (NodeList) xpath.evaluate(getSceneQuery(actualSceneId)+"/node/instance_geometry", dae, XPathConstants.NODESET);
+            for (int i=0; i < geometries.getLength(); i++) {
+                Element geometryInstance = (Element) geometries.item(i);
+                String geometryId = geometryInstance.getAttribute("url").substring(1);
+                loadGeometry(geometryId);
+            }
+        } catch(XPathExpressionException e) { }
+    }
+
+    private void loadGeometry(String geometryId) {
+        try {
+            // load vertices
+            String verticesId    = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/triangles/input[@semantic='VERTEX']/@source", dae).substring(1);
+            String sourceId      = xpath.evaluate(getGeometryQuery(geometryId)+String.format("/mesh/vertices[@id='%s']/input[@semantic='POSITION']/@source", verticesId), dae).substring(1);
+            String verticesData  = xpath.evaluate(getGeometryQuery(geometryId)+String.format("/mesh/source[@id='%s']/float_array/text()", sourceId), dae);
+            String trianglesData = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/triangles/p/text()", dae);
+
+            UI.printInfo(Module.API, "Reading mesh: %s ...", geometryId);
+            String[] verticesStrings = verticesData.trim().split("\\s+");
+            float[] points = new float[verticesStrings.length];
+            for (int i = 0; i < verticesStrings.length; i++) {
+                points[i] = Float.parseFloat(verticesStrings[i]);
+            }
+            String[] trianglesStrings = trianglesData.trim().split("\\s+");
+            int[] triangles = new int[trianglesStrings.length];
+            for (int i = 0; i < trianglesStrings.length; i++) {
+                triangles[i] = Integer.parseInt(trianglesStrings[i]);
+            }
+
+                api.parameter("diffuse", null, parseColor("1 1 1").getRGB());
+                api.shader("std", "diffuse");
+
+            api.parameter("triangles", triangles);
+            api.parameter("points", "point", "vertex", points);
+            api.parameter("normals", "none");
+            api.geometry(geometryId, "triangle_mesh");
+
+            api.parameter("shaders", new String[]{"std"});
+            api.instance(geometryId + ".instance", geometryId);
+        } catch(Exception e) { }
     }
 
     private String getSceneId() throws XPathExpressionException {
@@ -374,6 +418,10 @@ public class DAEParser implements SceneParser {
 
     private String getCameraQuery(String sceneId) {
         return String.format("/COLLADA/library_cameras/camera[@id='%s']", sceneId);
+    }
+
+    private String getGeometryQuery(String geometryId) {
+        return String.format("/COLLADA/library_geometries/geometry[@id='%s']", geometryId);
     }
 
     private void transformLookAt(Node lookAtNode) {
