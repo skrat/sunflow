@@ -131,6 +131,9 @@ public class SCParser implements SceneParser {
                     String file = p.getNextToken();
                     UI.printInfo(Module.API, "Including: \"%s\" ...", file);
                     api.include(file);
+                } else if (token.equals("node")) {
+                    if (!parseNode(api))
+                        return false;
                 } else
                     UI.printWarning(Module.API, "Unrecognized token %s", token);
             }
@@ -1190,6 +1193,17 @@ public class SCParser implements SceneParser {
         } else
             UI.printWarning(Module.API, "Unrecognized object type: %s", p.getNextToken());
         p.checkNextToken("}");
+    }
+
+    private boolean parseNode(SunflowAPIInterface api) throws ParserException, IOException {
+        p.checkNextToken("{");
+        p.checkNextToken("filename");
+        String fn = p.getNextToken();
+        p.checkNextToken("id");
+        String id = p.getNextToken();
+        p.checkNextToken("}");
+
+        return true;
     }
 
     private Color parseColor() throws IOException, ParserException, ColorSpecificationException {

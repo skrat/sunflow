@@ -10,16 +10,13 @@ import org.xml.sax.SAXException;
 import org.w3c.dom.Document;
 
 import org.sunflow.SunflowAPI;
-import org.sunflow.core.ParameterList;
 import org.sunflow.core.PrimitiveList;
+import org.sunflow.core.ParameterList;
 import org.sunflow.core.Tesselatable;
 import org.sunflow.core.ParameterList.InterpolationType;
 import org.sunflow.core.primitive.TriangleMesh;
 import org.sunflow.math.BoundingBox;
 import org.sunflow.math.Matrix4;
-import org.sunflow.math.Point3;
-import org.sunflow.math.Vector3;
-import org.sunflow.system.Memory;
 import org.sunflow.system.UI;
 import org.sunflow.system.UI.Module;
 import org.sunflow.util.FloatArray;
@@ -39,14 +36,24 @@ public class ColladaGeometry implements Tesselatable {
     }
 
     public PrimitiveList tesselate() {
-        UI.printInfo(Module.GEOM, "COLLADA - Reading geometry: \"%s\" ...", filename);
+        TriangleMesh m = new TriangleMesh();
+        ParameterList pl = new ParameterList();
+        addParams(pl);
+
+        if (m.update(pl, null))
+            return m;
+        return null;
+    }
+
+    public void addParams(ParameterList pl) {
         Resources r = Resources.getInstance();
         Document dae = null;
 
         if ( r.contains( (Object) filename) ) {
-            UI.printInfo(Module.GEOM, "COLLADA - Cached resource: \"%s\" ...", filename);
+            UI.printInfo(Module.GEOM, "COLLADA - Cached resource: %s ...", filename+"#"+xmlId);
             dae = (Document) r.get( (Object) filename);
         } else {
+            UI.printInfo(Module.GEOM, "COLLADA - Reading geometry: %s ...", filename+"#"+xmlId);
             try {
                 DocumentBuilder parser = DocumentBuilderFactory.newInstance().newDocumentBuilder();
                 dae = parser.parse(new File(filename));
@@ -64,21 +71,14 @@ public class ColladaGeometry implements Tesselatable {
         }
 
         if ( dae == null ) {
-            return null;
+            // throw...
         }
 
         float[] verts = ColladaDocument.getGeometryPoints(dae, xmlId).trim();
         int[] tris = ColladaDocument.getGeometryTriangles(dae, xmlId).trim();
-
-        TriangleMesh m = new TriangleMesh();
-        ParameterList pl = new ParameterList();
-
+        
         pl.addPoints("points", InterpolationType.VERTEX, verts);
         pl.addIntegerArray("triangles", tris);
-
-        if (m.update(pl, null))
-            return m;
-        return null;
     }
 
     public boolean update(ParameterList pl, SunflowAPI api) {
