@@ -2,6 +2,8 @@ package org.sunflow.core.parser;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.LinkedList;
+import java.util.ListIterator;
 
 import javax.xml.xpath.*;
 import javax.xml.parsers.DocumentBuilder;
@@ -459,6 +461,46 @@ public class DAEParser implements SceneParser {
     }
 
     private void transform(Element geometryInstance) {
+        LinkedList<LinkedList> transforms = new LinkedList<LinkedList>();
+        Element node = (Element) geometryInstance.getParentNode();
+
+        // collect transformations
+        for (; node != null && node.getTagName().equals("node"); node = (Element) node.getParentNode()) {
+
+            LinkedList<Matrix4> levelTransforms = new LinkedList<Matrix4>();
+            for(Node childNode = node.getFirstChild(); childNode!=null;){
+
+                Node nextChild = childNode.getNextSibling();
+                if (childNode.getNodeType() == Node.ELEMENT_NODE) {
+                    Element child = (Element) childNode;
+                    String tagname = child.getTagName();
+
+                    if (tagname.equals("scale")) {
+                        Vector3 scale = parseVector(child.getTextContent());
+                        levelTransforms.add( Matrix4.scale(scale.x,scale.y,scale.z) );
+
+                    } else if (tagname.equals("translate")) {
+                        Vector3 translation = parseVector(child.getTextContent());
+                        levelTransforms.add( Matrix4.translation(translation.x,translation.y,translation.z) );
+
+                    }
+                }
+                childNode = nextChild;
+            }
+            transforms.add(levelTransforms);
+        }
+
+
+        // iterate them from the end (topmost node)
+        Matrix4 m = Matrix4.IDENTITY;
+        for (int i = transforms.size()-1; i > -1; i--) {
+            ListIterator li = transforms.get(i).listIterator();
+            while( li.hasNext() ) {
+                Matrix4 t = (Matrix4) li.next();
+                m = m.multiply(t);
+            }
+        }
+        api.parameter("transform", m);
     }
 
     private String getSceneId() throws XPathExpressionException {
