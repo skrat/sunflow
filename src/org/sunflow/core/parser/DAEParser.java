@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.ListIterator;
+import java.util.Iterator;
 
 import javax.xml.xpath.*;
 import javax.xml.parsers.DocumentBuilder;
@@ -33,7 +34,7 @@ public class DAEParser implements SceneParser {
     private SunflowAPIInterface api;
     private Document dae;
     private XPath xpath;
-    private FastHashMap<String, Integer> geometriesCache;
+    private FastHashMap<String, FastHashMap<String, Integer>> geometriesCache;
 
     private String actualSceneId;
 
@@ -51,8 +52,8 @@ public class DAEParser implements SceneParser {
 
             setImage();
             setBackground();
-            setGI();
-            setTrace();
+            setGlobalIllumination();
+            setTraceDepths();
             setCamera();
 
             loadGeometries();
@@ -145,7 +146,7 @@ public class DAEParser implements SceneParser {
         }
     }
 
-    private void setGI() {
+    private void setGlobalIllumination() {
         try {
             String type = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/type",dae).trim();
             if (type.equals("irr-cache")) {
@@ -288,7 +289,7 @@ public class DAEParser implements SceneParser {
         api.options(SunflowAPI.DEFAULT_OPTIONS);
     }
 
-    private void setTrace() {
+    private void setTraceDepths() {
         try {
             String diff = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/trace_depths/diffuse/text()", dae);
             if (diff != "") {
@@ -354,26 +355,25 @@ public class DAEParser implements SceneParser {
                 aspectRatio = 1.333f;
             }
 
-            Node lookAt = ((Element) cameraInstance.getParentNode()).getElementsByTagName("lookat").item(0);
-
-            transformLookAt(lookAt);
+            transform(cameraInstance);
             api.parameter("fov", fov);
             api.parameter("aspect", aspectRatio);
             api.camera(cameraId, "pinhole");
             api.parameter("camera", cameraId);
             api.options(SunflowAPI.DEFAULT_OPTIONS);
 
-        } catch(XPathExpressionException e) {
-            UI.printError(Module.SCENE, "Error getting camera: is there any?");
+        } catch(Exception e) {
+            UI.printError(Module.SCENE, "Error loading camera: is there any?");
+            UI.printInfo(Module.SCENE, "Using auto-positioned camera instead ...");
         }
     }
 
     private void loadGeometries() {
         try {
-                api.parameter("diffuse", null, parseColor("0.5 0.8 0.1").getRGB());
+                api.parameter("diffuse", null, parseColor("0.9 1.0 0.9").getRGB());
                 api.shader("std", "diffuse");
 
-            geometriesCache = new FastHashMap<String, Integer>();
+            geometriesCache = new FastHashMap<String, FastHashMap<String ,Integer>>();
             NodeList nodes = (NodeList) xpath.evaluate(getSceneQuery(actualSceneId)+"/node", dae, XPathConstants.NODESET);
             for (int i=0; i < nodes.getLength(); i++) {
                 Element node = (Element) nodes.item(i);
@@ -382,81 +382,85 @@ public class DAEParser implements SceneParser {
                     Element geometryInstance = (Element) geometries.item(j);
                     String geometryId = geometryInstance.getAttribute("url").substring(1);
 
+                    FastHashMap<String, Integer> geoms = null;
                     if ( !geometriesCache.containsKey(geometryId) ) {
-                        loadGeometry(geometryId);
-                        geometriesCache.put(geometryId,0);
+                        geoms = loadGeometry(geometryId);
+                        geometriesCache.put(geometryId,geoms);
+                    } else {
+                        geoms = (FastHashMap<String, Integer>) geometriesCache.get(geometryId);
                     }
-                    Integer ii = geometriesCache.get(geometryId);
 
-                    transform(geometryInstance);
-                    api.instance(geometryId + "." + ii.toString() + ".instance", geometryId);
-                    geometriesCache.put(geometryId,ii+1);
+                    Iterator<FastHashMap.Entry<String, Integer>> it = geoms.iterator();
+                    while ( it.hasNext() ) {
+                        FastHashMap.Entry<String, Integer> g = it.next();
+                        String gid = (String) g.getKey();
+                        Integer ii = (Integer) g.getValue();
+
+                        transform(geometryInstance);
+                        api.parameter("shaders", new String[]{"std"});
+                        api.instance(gid + "." + ii.toString() + ".instance", gid);
+                        geoms.put(gid, ii+1);
+                    }
                 }
             }
         } catch(XPathExpressionException e) { }
     }
 
-    private void loadGeometry(String geometryId) {
+    private FastHashMap<String, Integer> loadGeometry(String geometryId) {
         try {
-            Integer offset = ((NodeList) xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/triangles/input", dae, XPathConstants.NODESET)).getLength();
+            NodeList trianglesList = (NodeList) xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/triangles", dae, XPathConstants.NODESET);
+            int trianglesNum = trianglesList.getLength();
+            int[] triangles = null;
+            FastHashMap<String, Integer> geoms = new FastHashMap<String, Integer>();
 
-            String verticesId    = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/triangles/input[@semantic='VERTEX']/@source", dae).substring(1);
-            String normalsId     = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/triangles/input[@semantic='NORMAL']/@source", dae);
-            String uvsId         = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/triangles/input[@semantic='TEXCOORD']/@source", dae);
+            for (int i=0; i<trianglesNum; i++) {
+                Element trisEl = (Element) trianglesList.item(i);
+                NodeList inputs = (NodeList) trisEl.getElementsByTagName("input");
+                Integer offset = inputs.getLength();
 
-            String verticesSourceId = xpath.evaluate(getGeometryQuery(geometryId)+String.format("/mesh/vertices[@id='%s']/input[@semantic='POSITION']/@source", verticesId), dae).substring(1);
-            String verticesData = xpath.evaluate(getGeometryQuery(geometryId)+String.format("/mesh/source[@id='%s']/float_array/text()", verticesSourceId), dae);
-
-            // load vertices
-            String[] verticesStrings = verticesData.trim().split("\\s+");
-            float[] points = new float[verticesStrings.length];
-            for (int i = 0; i < verticesStrings.length; i++) {
-                points[i] = Float.parseFloat(verticesStrings[i]);
-            }
-            
-            // load normals
-            float[] normals = null;
-            if (normalsId != "") {
-                String normalsData = xpath.evaluate(getGeometryQuery(geometryId)+String.format("/mesh/source[@id='%s']/float_array/text()", normalsId.substring(1)), dae);
-                if (normalsData != "") {
-                    String[] normalsStrings = normalsData.trim().split("\\s+");
-                    normals = new float[normalsStrings.length];
-                    for (int i=0; i<normals.length; i++) {
-                        normals[i] = Float.parseFloat(normalsStrings[i]);
+                float[] vertices = null;
+                float[] normals  = null;
+                float[] texcoord = null;
+                for (int j=0; j<inputs.getLength(); j++) {
+                    Element in = (Element) inputs.item(j);
+                    String semantic = in.getAttribute("semantic");
+                    String sourceId = in.getAttribute("source").substring(1);
+                    if ( semantic.equals("VERTEX") ) {
+                        String vertexDataId = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/vertices/input[@semantic='POSITION']/@source", dae).substring(1);
+                        String vertexData = xpath.evaluate(getGeometrySourceQuery(geometryId, vertexDataId), dae);
+                        vertices = parseFloats(vertexData);
+                    } else if ( semantic.equals("NORMAL") ) {
+                        String normalData = xpath.evaluate(getGeometrySourceQuery(geometryId, sourceId), dae);
+                        normals = parseFloats(normalData);
+                    } else if ( semantic.equals("TEXCOORD") ) {
+                        String texcoordData = xpath.evaluate(getGeometrySourceQuery(geometryId, sourceId), dae);
+                        texcoord = parseFloats(texcoordData);
                     }
                 }
-            }
 
-            // load UVs
-            float[] texcoords = null;
-            if (uvsId != "") {
-                String uvsData = xpath.evaluate(getGeometryQuery(geometryId)+String.format("/mesh/source[@id='%s']/float_array/text()", uvsId.substring(1)), dae);
-                if (uvsData != "") {
-                    String[] uvsStrings = uvsData.trim().split("\\s+");
-                    texcoords = new float[uvsStrings.length];
-                    for (int i=0; i<texcoords.length; i++) {
-                        texcoords[i] = Float.parseFloat(uvsStrings[i]);
-                    }
+                String trianglesData = trisEl.getElementsByTagName("p").item(0).getTextContent();
+                UI.printInfo(Module.GEOM, "Reading mesh: %s ...", geometryId);
+
+                String[] trianglesStrings = trianglesData.trim().split("\\s+");
+                int[] trianglez = new int[trianglesStrings.length/offset];
+                for (int j=0; j < trianglez.length; j++) {
+                    trianglez[j] = Integer.parseInt(trianglesStrings[j*offset]);
                 }
+
+                String gid = geometryId+"."+ Integer.toString(i);
+                api.parameter("triangles", trianglez);
+                api.parameter("points", "point", "vertex", vertices);
+                api.geometry(gid, "triangle_mesh");
+                geoms.put(gid, 0);
+
             }
 
-            String trianglesData = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/triangles/p/text()", dae);
-            UI.printInfo(Module.GEOM, "Reading mesh: %s ...", geometryId);
-
-            String[] trianglesStrings = trianglesData.trim().split("\\s+");
-            int[] triangles = new int[trianglesStrings.length/offset];
-            for (int i = 0; i < triangles.length; i++) {
-                triangles[i] = Integer.parseInt(trianglesStrings[i*offset]);
-            }
-
-                api.parameter("triangles", triangles);
-                api.parameter("points", "point", "vertex", points);
-                api.geometry(geometryId, "triangle_mesh");
-                api.parameter("shaders", new String[]{"std"});
+            return geoms;
 
         } catch(Exception e) {
             e.printStackTrace();
             UI.printError(Module.GEOM, "Error reading mesh: %s ...", geometryId);
+            return null;
         }
     }
 
@@ -483,6 +487,22 @@ public class DAEParser implements SceneParser {
                         Vector3 translation = parseVector(child.getTextContent());
                         levelTransforms.add( Matrix4.translation(translation.x,translation.y,translation.z) );
 
+                    } else if(tagname.equals("rotate")) {
+                        float[] floats = parseFloats(child.getTextContent());
+                        if (floats[0] == 1.0) {
+                            levelTransforms.add( Matrix4.rotateX((float) Math.toRadians(floats[3])) );
+                        } else if (floats[1] == 1.0) {
+                            levelTransforms.add( Matrix4.rotateY((float) Math.toRadians(floats[3])) );
+                        } else if (floats[2] == 1.0) {
+                            levelTransforms.add( Matrix4.rotateZ((float) Math.toRadians(floats[3])) );
+                        }
+
+                    } else if(tagname.equals("lookat")) {
+                        float[] floats = parseFloats(child.getTextContent());
+                        Point3 eye     = new Point3(floats[0],floats[1],floats[2]);
+                        Point3 target  = new Point3(floats[3],floats[4],floats[5]);
+                        Vector3 up     = new Vector3(floats[6],floats[7],floats[8]);
+                        levelTransforms.add( Matrix4.lookAt(eye, target, up) );
                     }
                 }
                 childNode = nextChild;
@@ -523,23 +543,8 @@ public class DAEParser implements SceneParser {
         return String.format("/COLLADA/library_geometries/geometry[@id='%s']", geometryId);
     }
 
-    private void transformLookAt(Node lookAtNode) {
-        // TODO: motion blur
-        // String offset = index < 0 ? "" : String.format("[%d]", index);
-        
-        String offset = "";
-        float[] lookAtFloats = new float[9];
-        String[] lookAtStrings = lookAtNode.getTextContent().trim().split("\\s+");
-        
-        for (int i=0; i < lookAtStrings.length; i++) {
-            lookAtFloats[i] = Float.parseFloat(lookAtStrings[i]);
-        }
-
-        Point3 eye = new Point3(lookAtFloats[0],lookAtFloats[1],lookAtFloats[2]);
-        Point3 target = new Point3(lookAtFloats[3],lookAtFloats[4],lookAtFloats[5]);
-        Vector3 up = new Vector3(lookAtFloats[6],lookAtFloats[7],lookAtFloats[8]);
-
-        api.parameter(String.format("transform%s", offset), Matrix4.lookAt(eye, target, up));
+    private String getGeometrySourceQuery(String geometryId, String inputId) {
+        return "/COLLADA/library_geometries/geometry[@id='"+geometryId+"']/mesh/source[@id='"+inputId+"']/float_array/text()";
     }
 
     private Color getBackgroundColor(String sceneId) {
@@ -560,26 +565,31 @@ public class DAEParser implements SceneParser {
             dimensions[1] = Integer.parseInt(dimensionsString[1]);
 
             return dimensions;
-        } catch(XPathExpressionException e) {
+        } catch(Exception e) {
             return null;
         }
     }
 
     private Color parseColor(String colorString) {
-        float[] rgb = new float[3];
-        String[] colors = colorString.trim().split("\\s+");
-        for(int i=0; i<3; i++) {
-            rgb[i] = Float.parseFloat(colors[i]);
+        try {
+            float[] rgb = parseFloats(colorString);
+            return new Color(rgb[0],rgb[1],rgb[2]);
+        } catch(Exception e) {
+            return null;
         }
-        return new Color(rgb[0],rgb[1],rgb[2]);
     }
 
     private Vector3 parseVector(String vectorString) {
-        String[] vectorStrings = vectorString.trim().split("\\s+");
-        float[] vectorFloats = new float[3];
-        for(int i=0; i<3; i++) {
-            vectorFloats[i] = Float.parseFloat(vectorStrings[i]);
-        }
+        float[] vectorFloats = parseFloats(vectorString);
         return new Vector3(vectorFloats[0],vectorFloats[1],vectorFloats[2]);
+    }
+
+    private float[] parseFloats(String floatString) {
+        String[] floatStrings = floatString.trim().split("\\s+");
+        float[] floats = new float[floatStrings.length];
+        for (int i=0; i<floats.length; i++) {
+            floats[i] = Float.parseFloat(floatStrings[i]);
+        }
+        return floats;
     }
 }
