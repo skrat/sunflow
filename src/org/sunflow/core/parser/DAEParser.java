@@ -34,9 +34,11 @@ public class DAEParser implements SceneParser {
     private SunflowAPIInterface api;
     private Document dae;
     private XPath xpath;
-    private FastHashMap<String, FastHashMap<String, Integer>> geometriesCache;
 
-    private String actualSceneId;
+    private FastHashMap<String, FastHashMap<String, Integer>> geometriesCache;
+    private LinkedList<String> shadersCache;
+
+    private String actualSceneId; // TODO: handle multiple scenes
 
     public DAEParser() {
         xpath = XPathFactory.newInstance().newXPath();
@@ -370,17 +372,29 @@ public class DAEParser implements SceneParser {
 
     private void loadGeometries() {
         try {
-                api.parameter("diffuse", null, parseColor("0.9 1.0 0.9").getRGB());
-                api.shader("std", "diffuse");
-
             geometriesCache = new FastHashMap<String, FastHashMap<String ,Integer>>();
+            shadersCache = new LinkedList<String>();
+            
             NodeList nodes = (NodeList) xpath.evaluate(getSceneQuery(actualSceneId)+"/node", dae, XPathConstants.NODESET);
+
             for (int i=0; i < nodes.getLength(); i++) {
                 Element node = (Element) nodes.item(i);
                 NodeList geometries = node.getElementsByTagName("instance_geometry");
                 for (int j=0; j < geometries.getLength(); j++) {
                     Element geometryInstance = (Element) geometries.item(j);
                     String geometryId = geometryInstance.getAttribute("url").substring(1);
+
+                    NodeList materials = geometryInstance.getElementsByTagName("instance_material");
+                    String material = null;
+                    if ( materials.getLength() > 0 ) {
+                        // TODO: multiple materials per geometry
+                        String materialId = ((Element) materials.item(0)).getAttribute("target").substring(1);
+                        if ( !shadersCache.contains(materialId) ) {
+                            loadShader(materialId);
+                            shadersCache.add(materialId);
+                        }
+                        material = materialId;
+                    }
 
                     FastHashMap<String, Integer> geoms = null;
                     if ( !geometriesCache.containsKey(geometryId) ) {
@@ -390,6 +404,7 @@ public class DAEParser implements SceneParser {
                         geoms = (FastHashMap<String, Integer>) geometriesCache.get(geometryId);
                     }
 
+
                     Iterator<FastHashMap.Entry<String, Integer>> it = geoms.iterator();
                     while ( it.hasNext() ) {
                         FastHashMap.Entry<String, Integer> g = it.next();
@@ -397,8 +412,12 @@ public class DAEParser implements SceneParser {
                         Integer ii = (Integer) g.getValue();
 
                         transform(geometryInstance);
-                        api.parameter("shaders", new String[]{"std"});
+                        if ( material != null ) {
+                            api.parameter("shaders", new String[]{material});
+                        }
                         api.instance(gid + "." + ii.toString() + ".instance", gid);
+
+                        // instance counter
                         geoms.put(gid, ii+1);
                     }
                 }
@@ -413,6 +432,9 @@ public class DAEParser implements SceneParser {
             int[] triangles = null;
             FastHashMap<String, Integer> geoms = new FastHashMap<String, Integer>();
 
+            UI.printInfo(Module.GEOM, "Reading mesh: %s ...", geometryId);
+
+            // handle multiple <triangles> elements
             for (int i=0; i<trianglesNum; i++) {
                 Element trisEl = (Element) trianglesList.item(i);
                 NodeList inputs = (NodeList) trisEl.getElementsByTagName("input");
@@ -439,8 +461,6 @@ public class DAEParser implements SceneParser {
                 }
 
                 String trianglesData = trisEl.getElementsByTagName("p").item(0).getTextContent();
-                UI.printInfo(Module.GEOM, "Reading mesh: %s ...", geometryId);
-
                 String[] trianglesStrings = trianglesData.trim().split("\\s+");
                 int[] trianglez = new int[trianglesStrings.length/offset];
                 for (int j=0; j < trianglez.length; j++) {
@@ -464,6 +484,105 @@ public class DAEParser implements SceneParser {
         }
     }
 
+    private void loadShader(String materialId) {
+        try {
+            String effectId = xpath.evaluate(getMaterialQuery(materialId)+"/instance_effect/@url", dae).substring(1);
+            Node technique = (Node) xpath.evaluate(getEffectQuery(effectId)+"/profile_COMMON/technique", dae, XPathConstants.NODE);
+            for (Node childNode = technique.getFirstChild(); childNode != null;) {
+                Node nextChild = childNode.getNextSibling();
+
+                if (childNode.getNodeType() == Node.ELEMENT_NODE) {
+                    Element child = (Element) childNode;
+                    String tagname = child.getTagName();
+                    FastHashMap<String, Object> shaderParams = getShaderParams(child);
+
+                    if ( tagname.equals("phong") ) {
+
+                        Object diffuseObj = shaderParams.get("diffuse");
+                        boolean texture = false;
+                        try {
+                            // try to get color
+                            float[] df = (float[]) diffuseObj;
+                            api.parameter("diffuse", null, new Color(df[0],df[1],df[2]).getRGB());
+                        } catch (ClassCastException e) {
+                            // handle texture
+                            Element df = (Element) diffuseObj;
+                            api.parameter("texture", getTexture(effectId, df));
+                            texture = true;
+                        }
+                        float[] sf = (float[]) shaderParams.get("specular");
+                        float[] pf = (float[]) shaderParams.get("shininess");
+                        api.parameter("specular", null, new Color(sf[0],sf[1],sf[3]).getRGB());
+                        api.parameter("power", pf[0]);
+                        api.parameter("samples", 0); // TODO: fix this
+                        if (texture) {
+                            api.shader(materialId, "textured_phong");
+                        } else {
+                            api.shader(materialId, "phong");
+                        }
+
+                    } else if ( tagname.equals("lambert") ) {
+
+                        Object diffuseObj = shaderParams.get("diffuse");
+                        try {
+                            // try to get color
+                            float[] df = (float[]) diffuseObj;
+                            api.parameter("diffuse", null, new Color(df[0],df[1],df[2]).getRGB());
+                            api.shader(materialId, "diffuse");
+                        } catch (Exception e) {
+                            // handle texture
+                            Element df = (Element) diffuseObj;
+                            api.parameter("texture", getTexture(effectId, df));
+                            api.shader(materialId, "textured_diffuse");
+                        }
+
+                    }
+                }
+
+                childNode = nextChild;
+            }
+
+        } catch(Exception e) {
+            e.printStackTrace();
+            UI.printError(Module.GEOM, "Error reading material: %s ...", materialId);
+        }
+    }
+
+    private FastHashMap<String, Object> getShaderParams(Element shaderEl) {
+        FastHashMap<String, Object> result = new FastHashMap<String, Object>();
+        for (Node childNode = shaderEl.getFirstChild(); childNode != null;) {
+            Node nextChild = childNode.getNextSibling();
+
+            if (childNode.getNodeType() == Node.ELEMENT_NODE) {
+                Element child  = (Element) childNode;
+                String tagname = child.getTagName();
+                String value   = child.getTextContent();
+
+                try {
+                    result.put(tagname, parseFloats(value));
+                } catch (NumberFormatException e) {
+                    result.put(tagname, child);
+                }
+            }
+
+            childNode = nextChild;
+        }
+        return result;
+    }
+
+    private String getTexture(String effectId, Element param) {
+        try {
+            String texture = ((Element) param.getElementsByTagName("texture").item(0)).getAttribute("texture");
+            String surface = xpath.evaluate(getEffectQuery(effectId)+String.format("/profile_COMMON/newparam[@sid='%s']/sampler2D/source/text()", texture), dae);
+            String image   = xpath.evaluate(getEffectQuery(effectId)+String.format("/profile_COMMON/newparam[@sid='%s']/surface[@type='2D']/init_from/text()", surface), dae);
+            return xpath.evaluate(getImageQuery(image), dae).trim();
+        } catch (Exception e) {
+            e.printStackTrace();
+            UI.printError(Module.GEOM, "Error reading texture: for effect %s ...", effectId);
+            return null;
+        }
+    }
+
     private void transform(Element geometryInstance) {
         LinkedList<LinkedList> transforms = new LinkedList<LinkedList>();
         Element node = (Element) geometryInstance.getParentNode();
@@ -472,7 +591,7 @@ public class DAEParser implements SceneParser {
         for (; node != null && node.getTagName().equals("node"); node = (Element) node.getParentNode()) {
 
             LinkedList<Matrix4> levelTransforms = new LinkedList<Matrix4>();
-            for(Node childNode = node.getFirstChild(); childNode!=null;){
+            for (Node childNode = node.getFirstChild(); childNode!=null;) {
 
                 Node nextChild = childNode.getNextSibling();
                 if (childNode.getNodeType() == Node.ELEMENT_NODE) {
@@ -523,6 +642,29 @@ public class DAEParser implements SceneParser {
         api.parameter("transform", m);
     }
 
+    private Color getBackgroundColor(String sceneId) {
+        try {
+            String colorString = xpath.evaluate(getSunflowSceneQuery(sceneId)+"/background/color", dae);
+            return parseColor(colorString);
+        } catch(XPathExpressionException e) {
+            return null;
+        }
+    }
+
+    private int[] getImageDimensions(String sceneId) {
+        try {
+            String intsString = xpath.evaluate(getSunflowSceneQuery(sceneId)+"/image/resolution", dae);
+            String[] dimensionsString = intsString.trim().split("\\s+");
+            int[] dimensions = new int[2];
+            dimensions[0] = Integer.parseInt(dimensionsString[0]);
+            dimensions[1] = Integer.parseInt(dimensionsString[1]);
+
+            return dimensions;
+        } catch(Exception e) {
+            return null;
+        }
+    }
+
     private String getSceneId() throws XPathExpressionException {
         return xpath.evaluate("/COLLADA/scene/instance_visual_scene/@url", dae).substring(1); 
     }
@@ -547,27 +689,16 @@ public class DAEParser implements SceneParser {
         return "/COLLADA/library_geometries/geometry[@id='"+geometryId+"']/mesh/source[@id='"+inputId+"']/float_array/text()";
     }
 
-    private Color getBackgroundColor(String sceneId) {
-        try {
-            String colorString = xpath.evaluate(getSunflowSceneQuery(sceneId)+"/background/color", dae);
-            return parseColor(colorString);
-        } catch(XPathExpressionException e) {
-            return null;
-        }
+    private String getMaterialQuery(String materialId) {
+        return String.format("/COLLADA/library_materials/material[@id='%s']", materialId);
     }
 
-    private int[] getImageDimensions(String sceneId) {
-        try {
-            String intsString = xpath.evaluate(getSunflowSceneQuery(sceneId)+"/image/resolution", dae);
-            String[] dimensionsString = intsString.trim().split("\\s+");
-            int[] dimensions = new int[2];
-            dimensions[0] = Integer.parseInt(dimensionsString[0]);
-            dimensions[1] = Integer.parseInt(dimensionsString[1]);
+    private String getEffectQuery(String effectId) {
+        return String.format("/COLLADA/library_effects/effect[@id='%s']", effectId);
+    }
 
-            return dimensions;
-        } catch(Exception e) {
-            return null;
-        }
+    private String getImageQuery(String imageId) {
+        return String.format("/COLLADA/library_images/image[@id='%s']/init_from/text()", imageId);
     }
 
     private Color parseColor(String colorString) {
