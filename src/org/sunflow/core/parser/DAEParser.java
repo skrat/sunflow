@@ -36,6 +36,7 @@ public class DAEParser implements SceneParser {
     private XPath xpath;
 
     private FastHashMap<String, FastHashMap<String, Integer>> geometriesCache;
+    private FastHashMap<String, Integer> lightsCache;
     private LinkedList<String> shadersCache;
 
     private String actualSceneId; // TODO: handle multiple scenes
@@ -59,6 +60,7 @@ public class DAEParser implements SceneParser {
             setCamera();
 
             loadGeometries();
+            loadLights();
 
         } catch(ParserConfigurationException e) {
             e.printStackTrace();
@@ -379,6 +381,7 @@ public class DAEParser implements SceneParser {
 
             for (int i=0; i < nodes.getLength(); i++) {
                 Element node = (Element) nodes.item(i);
+                String nodeId = node.getAttribute("id");
                 NodeList geometries = node.getElementsByTagName("instance_geometry");
                 for (int j=0; j < geometries.getLength(); j++) {
                     Element geometryInstance = (Element) geometries.item(j);
@@ -404,6 +407,7 @@ public class DAEParser implements SceneParser {
                         geoms = (FastHashMap<String, Integer>) geometriesCache.get(geometryId);
                     }
 
+                    UI.printInfo(Module.GEOM, "Reading mesh: %s - %s ...", nodeId, geometryId);
 
                     Iterator<FastHashMap.Entry<String, Integer>> it = geoms.iterator();
                     while ( it.hasNext() ) {
@@ -432,8 +436,6 @@ public class DAEParser implements SceneParser {
             int[] triangles = null;
             FastHashMap<String, Integer> geoms = new FastHashMap<String, Integer>();
 
-            UI.printInfo(Module.GEOM, "Reading mesh: %s ...", geometryId);
-
             // handle multiple <triangles> elements
             for (int i=0; i<trianglesNum; i++) {
                 Element trisEl = (Element) trianglesList.item(i);
@@ -460,16 +462,44 @@ public class DAEParser implements SceneParser {
                     }
                 }
 
-                String trianglesData = trisEl.getElementsByTagName("p").item(0).getTextContent();
-                String[] trianglesStrings = trianglesData.trim().split("\\s+");
-                int[] trianglez = new int[trianglesStrings.length/offset];
-                for (int j=0; j < trianglez.length; j++) {
-                    trianglez[j] = Integer.parseInt(trianglesStrings[j*offset]);
+                String pointsData = trisEl.getElementsByTagName("p").item(0).getTextContent();
+                String[] pointsStrings = pointsData.trim().split("\\s+");
+                int num = pointsStrings.length/offset;
+                int[] trianglesOut = new int[num];
+                for (int j=0; j < num; j++) {
+                    trianglesOut[j] = Integer.parseInt(pointsStrings[j*offset]);
+                }
+                float[] normalsFloats = null;
+                if (normals != null) {
+                    normalsFloats = new float[(pointsStrings.length/offset)*3];
+                    int nNum = normalsFloats.length/3;
+
+                    for (int j=0; j < nNum; j++) {
+                        int nix = Integer.parseInt(pointsStrings[j*offset+1]);
+                        try {
+                            normalsFloats[j*3] = (normalsFloats[j*3] + normals[nix*3])/2.0f;
+                        } catch (NullPointerException e){
+                            normalsFloats[j*3] = normals[nix*3];
+                        }
+                        try {
+                            normalsFloats[j*3+1] = (normalsFloats[j*3+1] + normals[nix*3+1])/2.0f;
+                        } catch (NullPointerException e){
+                            normalsFloats[j*3+1] = normals[nix*3+1];
+                        }
+                        try {
+                            normalsFloats[j*3+2] = (normalsFloats[j*3+2] + normals[nix*3+2])/2.0f;
+                        } catch (NullPointerException e){
+                            normalsFloats[j*3+2] = normals[nix*3+2];
+                        }
+                    }
                 }
 
                 String gid = geometryId+"."+ Integer.toString(i);
-                api.parameter("triangles", trianglez);
+                api.parameter("triangles", trianglesOut);
                 api.parameter("points", "point", "vertex", vertices);
+                if (normals != null) {
+                    api.parameter("normals", "vector", "facevarying", normalsFloats);
+                }
                 api.geometry(gid, "triangle_mesh");
                 geoms.put(gid, 0);
 
@@ -546,6 +576,100 @@ public class DAEParser implements SceneParser {
             e.printStackTrace();
             UI.printError(Module.GEOM, "Error reading material: %s ...", materialId);
         }
+    }
+
+    private void loadLights() {
+        try {
+            lightsCache = new FastHashMap<String, Integer>();
+            
+            NodeList nodes = (NodeList) xpath.evaluate(getSceneQuery(actualSceneId)+"/node", dae, XPathConstants.NODESET);
+
+            for (int i=0; i < nodes.getLength(); i++) {
+                Element node = (Element) nodes.item(i);
+
+                for (Node childNode = node.getFirstChild(); childNode != null;) {
+                    Node nextChild = childNode.getNextSibling();
+
+                    if (childNode.getNodeType() == Node.ELEMENT_NODE) {
+                        Element child  = (Element) childNode;
+                        if ( child.getTagName().equals("instance_light") ) {
+                            String lightId = child.getAttribute("url").substring(1);
+
+                            if ( !lightsCache.containsKey(lightId) ) {
+                                lightsCache.put(lightId, 0);
+                            }
+                            UI.printInfo(Module.API, "Reading light directional: %s ...", lightId);
+
+                            loadLight(child, lightId);
+                        }
+                    }
+
+                    childNode = nextChild;
+                }
+            }
+        } catch(XPathExpressionException e) { }
+    }
+
+    private void loadLight(Element lightInstance, String lightId) {
+        try {
+            Element light = (Element) xpath.evaluate(getLightQuery(lightId)+"/technique_common", dae, XPathConstants.NODE);
+            for (Node childNode = light.getFirstChild(); childNode != null;) {
+                Node nextChild = childNode.getNextSibling();
+
+                if (childNode.getNodeType() == Node.ELEMENT_NODE) {
+                    Element child = (Element) childNode;
+                    String tagname = child.getTagName();
+
+                    // COLLADA directional lights are infinite
+                    if (tagname.equals("directional")) {
+                        api.parameter("source", new Point3(0.0f,0.0f,10000.0f));
+                        Vector3 dir = getRotation(lightInstance);
+                        api.parameter("dir", dir);
+                        api.parameter("radius", 10000.0f);
+
+                        Integer ii = (Integer) lightsCache.get(lightId);
+                        api.light(lightsCache+"."+Integer.toString(ii), "directional");
+
+                        ii++;
+                        lightsCache.put(lightId, ii);
+                    }
+                }
+
+                childNode = nextChild;
+            }
+        } catch (Exception e) {
+            UI.printError(Module.GEOM, "Error reading light: %s ...", lightId);
+        }
+    }
+
+    private Vector3 getRotation(Element instance) {
+        Vector3 result = new Vector3(0.0f,0.0f,0.0f);
+        Element node = (Element) instance.getParentNode();
+        
+        for (Node childNode = node.getFirstChild(); childNode != null;) {
+            Node nextChild = childNode.getNextSibling();
+
+            if (childNode.getNodeType() == Node.ELEMENT_NODE) {
+                Element child = (Element) childNode;
+                String tagname = child.getTagName();
+
+                if (tagname.equals("rotate")) {
+                    float[] value = parseFloats(child.getTextContent());
+                    float angle = value[3];
+                    if (value[0] == 1.0f) {
+                        result.x = angle;
+                    } else if (value[1] == 1.0f) {
+                        result.y = angle;
+                    } else if (value[2] == 1.0f) {
+                        result.z = angle;
+                    }
+                }
+            }
+
+            childNode = nextChild;
+        }
+
+        return result;
     }
 
     private FastHashMap<String, Object> getShaderParams(Element shaderEl) {
@@ -699,6 +823,10 @@ public class DAEParser implements SceneParser {
 
     private String getImageQuery(String imageId) {
         return String.format("/COLLADA/library_images/image[@id='%s']/init_from/text()", imageId);
+    }
+
+    private String getLightQuery(String lightId) {
+        return String.format("/COLLADA/library_lights/light[@id='%s']", lightId);
     }
 
     private Color parseColor(String colorString) {
