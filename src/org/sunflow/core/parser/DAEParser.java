@@ -524,7 +524,7 @@ public class DAEParser implements SceneParser {
                 if (childNode.getNodeType() == Node.ELEMENT_NODE) {
                     Element child = (Element) childNode;
                     String tagname = child.getTagName();
-                    FastHashMap<String, Object> shaderParams = getShaderParams(child);
+                    FastHashMap<String, Object> shaderParams = getParams(child);
 
                     if ( tagname.equals("phong") ) {
 
@@ -540,15 +540,26 @@ public class DAEParser implements SceneParser {
                             api.parameter("texture", getTexture(effectId, df));
                             texture = true;
                         }
-                        float[] sf = (float[]) shaderParams.get("specular");
-                        float[] pf = (float[]) shaderParams.get("shininess");
-                        api.parameter("specular", null, new Color(sf[0],sf[1],sf[3]).getRGB());
-                        api.parameter("power", pf[0]);
-                        api.parameter("samples", 0); // TODO: fix this
-                        if (texture) {
-                            api.shader(materialId, "textured_phong");
+
+                        float rf = ((float[]) shaderParams.get("reflectivity"))[0];
+                        if (rf > 0.0f) {
+                            api.parameter("shiny", rf);
+                            if (texture) {
+                                api.shader(materialId, "textured_shiny_diffuse");
+                            } else {
+                                api.shader(materialId, "shiny_diffuse");
+                            }
                         } else {
-                            api.shader(materialId, "phong");
+                            float[] sf = (float[]) shaderParams.get("specular");
+                            float[] pf = (float[]) shaderParams.get("shininess");
+                            api.parameter("specular", null, new Color(sf[0],sf[1],sf[3]).getRGB());
+                            api.parameter("power", pf[0]);
+                            api.parameter("samples", 0); // TODO: fix this
+                            if (texture) {
+                                api.shader(materialId, "textured_phong");
+                            } else {
+                                api.shader(materialId, "phong");
+                            }
                         }
 
                     } else if ( tagname.equals("lambert") ) {
@@ -628,7 +639,27 @@ public class DAEParser implements SceneParser {
                         api.parameter("radius", 10000.0f);
 
                         Integer ii = (Integer) lightsCache.get(lightId);
-                        api.light(lightsCache+"."+Integer.toString(ii), "directional");
+                        api.light(lightId+"."+Integer.toString(ii), "directional");
+
+                        ii++;
+                        lightsCache.put(lightId, ii);
+                    } else if (tagname.equals("point")) {
+                        FastHashMap<String, Object> params = getParams(child);
+                        Color power = null;
+                        try {
+                            float[] cf = (float[]) params.get("color");
+                            power = new Color(cf[0],cf[1],cf[2]);
+                        } catch (Exception e) {
+                            power = new Color(1.0f,1.0f,1.0f);
+                        }
+                        try {
+                            power.mul( ((float[]) params.get("constant_attenuation"))[0] );
+                        } catch (Exception e) { }
+
+                        Integer ii = (Integer) lightsCache.get(lightId);
+                        api.parameter("center", getTranslation(lightInstance));
+                        api.parameter("power", null, power.getRGB());
+                        api.light(lightId+"."+Integer.toString(ii), "point");
 
                         ii++;
                         lightsCache.put(lightId, ii);
@@ -642,7 +673,34 @@ public class DAEParser implements SceneParser {
         }
     }
 
+    private Point3 getTranslation(Element instance) {
+        // TODO: crawl parents
+        Point3 result = new Point3(0.0f,0.0f,0.0f);
+        Element node = (Element) instance.getParentNode();
+
+        for (Node childNode = node.getFirstChild(); childNode != null;) {
+            Node nextChild = childNode.getNextSibling();
+
+            if (childNode.getNodeType() == Node.ELEMENT_NODE) {
+                Element child = (Element) childNode;
+                String tagname = child.getTagName();
+
+                if (tagname.equals("translate")) {
+                    float[] value = parseFloats(child.getTextContent());
+                    result.x = value[0];
+                    result.y = value[1];
+                    result.z = value[2];
+                }
+            }
+
+            childNode = nextChild;
+        }
+
+        return result;
+    }
+
     private Vector3 getRotation(Element instance) {
+        // TODO: crawl parents
         Vector3 result = new Vector3(0.0f,0.0f,0.0f);
         Element node = (Element) instance.getParentNode();
         
@@ -672,9 +730,9 @@ public class DAEParser implements SceneParser {
         return result;
     }
 
-    private FastHashMap<String, Object> getShaderParams(Element shaderEl) {
+    private FastHashMap<String, Object> getParams(Element el) {
         FastHashMap<String, Object> result = new FastHashMap<String, Object>();
-        for (Node childNode = shaderEl.getFirstChild(); childNode != null;) {
+        for (Node childNode = el.getFirstChild(); childNode != null;) {
             Node nextChild = childNode.getNextSibling();
 
             if (childNode.getNodeType() == Node.ELEMENT_NODE) {
