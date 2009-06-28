@@ -469,6 +469,7 @@ public class DAEParser implements SceneParser {
                 for (int j=0; j < num; j++) {
                     trianglesOut[j] = Integer.parseInt(pointsStrings[j*offset]);
                 }
+
                 float[] normalsFloats = null;
                 if (normals != null) {
                     normalsFloats = new float[(pointsStrings.length/offset)*3];
@@ -494,11 +495,26 @@ public class DAEParser implements SceneParser {
                     }
                 }
 
+                float[] texcoordFloats = null;
+                if (texcoord != null) {
+                    texcoordFloats = new float[(vertices.length/3)*2];
+
+                    for (int j=0; j < num; j++) {
+                        int vix = Integer.parseInt(pointsStrings[j*offset]);
+                        int tix = Integer.parseInt(pointsStrings[j*offset+2]);
+                        texcoordFloats[vix*2] = texcoord[tix*2];
+                        texcoordFloats[vix*2+1] = texcoord[tix*2+1];
+                    }
+                }
+
                 String gid = geometryId+"."+ Integer.toString(i);
                 api.parameter("triangles", trianglesOut);
                 api.parameter("points", "point", "vertex", vertices);
                 if (normals != null) {
                     api.parameter("normals", "vector", "facevarying", normalsFloats);
+                }
+                if (texcoord != null && texcoordFloats != null) {
+                    api.parameter("uvs", "texcoord", "vertex", texcoordFloats);
                 }
                 api.geometry(gid, "triangle_mesh");
                 geoms.put(gid, 0);
@@ -541,16 +557,14 @@ public class DAEParser implements SceneParser {
                             texture = true;
                         }
 
+                        float[] sf = (float[]) shaderParams.get("specular");
                         float rf = ((float[]) shaderParams.get("reflectivity"))[0];
                         if (rf > 0.0f) {
-                            api.parameter("shiny", rf);
-                            if (texture) {
-                                api.shader(materialId, "textured_shiny_diffuse");
-                            } else {
-                                api.shader(materialId, "shiny_diffuse");
-                            }
+                            api.parameter("specular", null, new Color(sf[0],sf[1],sf[3]).getRGB());
+                            api.parameter("glossyness", 1.0f-rf);
+                            api.parameter("samples", 0); // TODO: fix this
+                            api.shader(materialId, "uber");
                         } else {
-                            float[] sf = (float[]) shaderParams.get("specular");
                             float[] pf = (float[]) shaderParams.get("shininess");
                             api.parameter("specular", null, new Color(sf[0],sf[1],sf[3]).getRGB());
                             api.parameter("power", pf[0]);
