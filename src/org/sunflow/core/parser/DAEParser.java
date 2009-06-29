@@ -361,6 +361,10 @@ public class DAEParser implements SceneParser {
                                 lightCache.put(id,0);
                             }
                             instantiateLight(child, transformation, id);
+
+                        // NODE INSTANCE
+                        } else if (tagname.equals("instance_node")) {
+                            // OMG
                         }
                     }
 
@@ -390,20 +394,11 @@ public class DAEParser implements SceneParser {
                 yfov = null;
             }
             fov = 0.0f;
-            if (xfov != null)  {
-                fov += xfov;
-            }
-            if (yfov != null) {
-                fov += yfov;
-            }
-            // just one FOV
-            if (xfov != null && yfov != null) {
-                fov = fov/2.0f;
-            }
-            // default value
-            if (fov == 0.0f) {
-                fov = 45.0f;
-            }
+            if (xfov != null)  {  fov += xfov;    }
+            if (yfov != null)  {  fov += yfov;    }
+            if (xfov != null && yfov != null)
+                               {  fov = fov/2.0f; }
+            if (fov == 0.0f)   {  fov = 45.0f;    }  // default value
 
             Float aspectRatio;
             try {
@@ -635,6 +630,7 @@ public class DAEParser implements SceneParser {
     }
 
     private void instantiateLight(Element lightInstance, Matrix4 transformation, String lightId) {
+        UI.printInfo(Module.LIGHT, "Reading light: %s ...", lightId);
         try {
             Element light = (Element) xpath.evaluate(getLightQuery(lightId)+"/technique_common", dae, XPathConstants.NODE);
             for (Node childNode = light.getFirstChild(); childNode != null;) {
@@ -679,7 +675,7 @@ public class DAEParser implements SceneParser {
                 childNode = nextChild;
             }
         } catch (Exception e) {
-            UI.printError(Module.GEOM, "Error reading light: %s ...", lightId);
+            UI.printError(Module.LIGHT, "Error reading light: %s ...", lightId);
         }
     }
 
