@@ -38,7 +38,7 @@ public class DAEParser implements SceneParser {
 
     private FastHashMap<String, FastHashMap<String, Integer>> geometryCache;
     private FastHashMap<String, Integer> lightCache;
-    private FastHashMap<Element, Matrix4> nodeCache;
+    private FastHashMap<Node, Matrix4> transformCache;
     private LinkedList<String> shaderCache;
 
     private String actualSceneId; // TODO: handle multiple scenes
@@ -322,7 +322,7 @@ public class DAEParser implements SceneParser {
         geometryCache = new FastHashMap<String, FastHashMap<String ,Integer>>();
         shaderCache = new LinkedList<String>();
         lightCache = new FastHashMap<String, Integer>();
-        nodeCache = new FastHashMap<Element, Matrix4>();
+        transformCache = new FastHashMap<Node, Matrix4>();
 
         try {
             NodeList nodes = (NodeList) xpath.evaluate(getSceneQuery(actualSceneId)+"//node", dae, XPathConstants.NODESET);
@@ -332,7 +332,7 @@ public class DAEParser implements SceneParser {
                 Element node = (Element) nodes.item(i);
                 String nodeId = node.getAttribute("id");
                 Matrix4 transformation = transform(node);
-                nodeCache.put(node, transformation);
+                transformCache.put(node, transformation);
 
                 for (Node childNode = node.getFirstChild(); childNode != null;) {
                     Node nextChild = childNode.getNextSibling();
@@ -715,61 +715,65 @@ public class DAEParser implements SceneParser {
     }
 
     private Matrix4 transform(Element node) {
-        LinkedList<LinkedList> transforms = new LinkedList<LinkedList>();
+        Node parentNode = node.getParentNode();
+        Matrix4 parent = null;
+        if ( transformCache.containsKey(parentNode) ) {
+            parent = (Matrix4) transformCache.get(parentNode);
+        } else {
+            if ( ! ((Element) parentNode).getTagName().equals("node") ) {
+                parent = Matrix4.IDENTITY;
+            } else {
+                parent = transform( (Element) parentNode );
+                transformCache.put(parentNode, parent);
+            }
+        }
+        Matrix4 result = Matrix4.IDENTITY;
+        result = result.multiply(parent);
 
-        // collect transformations
-        for (; node != null && node.getTagName().equals("node"); node = (Element) node.getParentNode()) {
+        LinkedList<Matrix4> nodeTransforms = new LinkedList<Matrix4>();
+        for (Node childNode = node.getFirstChild(); childNode!=null;) {
 
-            LinkedList<Matrix4> levelTransforms = new LinkedList<Matrix4>();
-            for (Node childNode = node.getFirstChild(); childNode!=null;) {
+            Node nextChild = childNode.getNextSibling();
+            if (childNode.getNodeType() == Node.ELEMENT_NODE) {
+                Element child = (Element) childNode;
+                String tagname = child.getTagName();
 
-                Node nextChild = childNode.getNextSibling();
-                if (childNode.getNodeType() == Node.ELEMENT_NODE) {
-                    Element child = (Element) childNode;
-                    String tagname = child.getTagName();
+                if (tagname.equals("scale")) {
+                    Vector3 scale = parseVector(child.getTextContent());
+                    nodeTransforms.add( Matrix4.scale(scale.x,scale.y,scale.z) );
 
-                    if (tagname.equals("scale")) {
-                        Vector3 scale = parseVector(child.getTextContent());
-                        levelTransforms.add( Matrix4.scale(scale.x,scale.y,scale.z) );
+                } else if (tagname.equals("translate")) {
+                    Vector3 translation = parseVector(child.getTextContent());
+                    nodeTransforms.add( Matrix4.translation(translation.x,translation.y,translation.z) );
 
-                    } else if (tagname.equals("translate")) {
-                        Vector3 translation = parseVector(child.getTextContent());
-                        levelTransforms.add( Matrix4.translation(translation.x,translation.y,translation.z) );
-
-                    } else if(tagname.equals("rotate")) {
-                        float[] floats = parseFloats(child.getTextContent());
-                        if (floats[0] == 1.0) {
-                            levelTransforms.add( Matrix4.rotateX((float) Math.toRadians(floats[3])) );
-                        } else if (floats[1] == 1.0) {
-                            levelTransforms.add( Matrix4.rotateY((float) Math.toRadians(floats[3])) );
-                        } else if (floats[2] == 1.0) {
-                            levelTransforms.add( Matrix4.rotateZ((float) Math.toRadians(floats[3])) );
-                        }
-
-                    } else if(tagname.equals("lookat")) {
-                        float[] floats = parseFloats(child.getTextContent());
-                        Point3 eye     = new Point3(floats[0],floats[1],floats[2]);
-                        Point3 target  = new Point3(floats[3],floats[4],floats[5]);
-                        Vector3 up     = new Vector3(floats[6],floats[7],floats[8]);
-                        levelTransforms.add( Matrix4.lookAt(eye, target, up) );
+                } else if(tagname.equals("rotate")) {
+                    float[] floats = parseFloats(child.getTextContent());
+                    if (floats[0] == 1.0) {
+                        nodeTransforms.add( Matrix4.rotateX((float) Math.toRadians(floats[3])) );
+                    } else if (floats[1] == 1.0) {
+                        nodeTransforms.add( Matrix4.rotateY((float) Math.toRadians(floats[3])) );
+                    } else if (floats[2] == 1.0) {
+                        nodeTransforms.add( Matrix4.rotateZ((float) Math.toRadians(floats[3])) );
                     }
+
+                } else if(tagname.equals("lookat")) {
+                    float[] floats = parseFloats(child.getTextContent());
+                    Point3 eye     = new Point3(floats[0],floats[1],floats[2]);
+                    Point3 target  = new Point3(floats[3],floats[4],floats[5]);
+                    Vector3 up     = new Vector3(floats[6],floats[7],floats[8]);
+                    nodeTransforms.add( Matrix4.lookAt(eye, target, up) );
                 }
-                childNode = nextChild;
             }
-            transforms.add(levelTransforms);
+            childNode = nextChild;
         }
 
-
-        // iterate them from the end (topmost node)
-        Matrix4 m = Matrix4.IDENTITY;
-        for (int i = transforms.size()-1; i > -1; i--) {
-            ListIterator li = transforms.get(i).listIterator();
-            while( li.hasNext() ) {
-                Matrix4 t = (Matrix4) li.next();
-                m = m.multiply(t);
-            }
+        ListIterator li = nodeTransforms.listIterator();
+        while( li.hasNext() ) {
+            Matrix4 t = (Matrix4) li.next();
+            result = result.multiply(t);
         }
-        return m;
+
+        return result;
     }
 
     private Color getBackgroundColor(String sceneId) {
