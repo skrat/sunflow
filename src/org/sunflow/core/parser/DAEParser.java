@@ -331,8 +331,13 @@ public class DAEParser implements SceneParser {
             for (int i=0; i < nodesLength; i++) {
                 Element node = (Element) nodes.item(i);
                 String nodeId = node.getAttribute("id");
-                Matrix4 transformation = transform(node);
-                transformCache.put(node, transformation);
+                Matrix4 transformation = null;
+                if ( transformCache.containsKey(node) ) {
+                    transformation = transformCache.get(node);
+                } else {
+                    transformation = transform(node);
+                    transformCache.put(node, transformation);
+                }
 
                 for (Node childNode = node.getFirstChild(); childNode != null;) {
                     Node nextChild = childNode.getNextSibling();
@@ -720,8 +725,10 @@ public class DAEParser implements SceneParser {
         if ( transformCache.containsKey(parentNode) ) {
             parent = (Matrix4) transformCache.get(parentNode);
         } else {
+            // identity matrix if it's root
             if ( ! ((Element) parentNode).getTagName().equals("node") ) {
                 parent = Matrix4.IDENTITY;
+            // calculate parent
             } else {
                 parent = transform( (Element) parentNode );
                 transformCache.put(parentNode, parent);
