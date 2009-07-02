@@ -769,6 +769,9 @@ public class DAEParser implements SceneParser {
                     Point3 target  = new Point3(floats[3],floats[4],floats[5]);
                     Vector3 up     = new Vector3(floats[6],floats[7],floats[8]);
                     nodeTransforms.add( Matrix4.lookAt(eye, target, up) );
+                } else if(tagname.equals("matrix")) {
+                    float[] floats = parseFloats(child.getTextContent());
+                    nodeTransforms.add( new Matrix4(floats, true) );
                 }
             }
             childNode = nextChild;
