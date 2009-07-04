@@ -40,8 +40,20 @@ public class DAEParser implements SceneParser {
     private FastHashMap<String, Integer> lightCache;
     private FastHashMap<Node, Matrix4> transformCache;
     private LinkedList<String> shaderCache;
+    private static int FACE = 11;
+    private static int VERTEX = 12;
 
     private String actualSceneId; // TODO: handle multiple scenes
+
+    private class Geometry {
+        public String material;
+        public int instancesCount;
+
+        public Geometry(String mat, int c) {
+            material = mat;
+            instancesCount = c;
+        }
+    }
 
     public DAEParser() {
         xpath = XPathFactory.newInstance().newXPath();
@@ -448,45 +460,49 @@ public class DAEParser implements SceneParser {
     private void instantiateGeometry(Element instance, Matrix4 transformation, String geometryId) {
         UI.printInfo(Module.GEOM, "Instantiating mesh: %s ...", geometryId);
 
-        FastHashMap<String, Geometry> geoms = geometryCache.get(geometryId);
+        try {
+            FastHashMap<String, Geometry> geoms = geometryCache.get(geometryId);
 
-        FastHashMap<String, String> materials = new FastHashMap<String, String>();
-        NodeList matInstances = instance.getElementsByTagName("instance_material");
-        if ( matInstances.getLength() > 0 ) {
-            for (int i=0; i < matInstances.getLength(); i++) {
-                Element imat = (Element) matInstances.item(i);
-                String materialId = imat.getAttribute("target").substring(1);
-                String symbol = imat.getAttribute("symbol");
-                materials.put(symbol, materialId);
+            FastHashMap<String, String> materials = new FastHashMap<String, String>();
+            NodeList matInstances = instance.getElementsByTagName("instance_material");
+            if ( matInstances.getLength() > 0 ) {
+                for (int i=0; i < matInstances.getLength(); i++) {
+                    Element imat = (Element) matInstances.item(i);
+                    String materialId = imat.getAttribute("target").substring(1);
+                    String symbol = imat.getAttribute("symbol");
+                    materials.put(symbol, materialId);
 
-                if ( !shaderCache.contains(materialId) ) {
-                    loadShader(materialId);
-                    shaderCache.add(materialId);
+                    if ( !shaderCache.contains(materialId) ) {
+                        loadShader(materialId);
+                        shaderCache.add(materialId);
+                    }
                 }
             }
-        }
 
-        Iterator<FastHashMap.Entry<String, Geometry>> it = geoms.iterator();
-        while ( it.hasNext() ) {
+            Iterator<FastHashMap.Entry<String, Geometry>> it = geoms.iterator();
+            while ( it.hasNext() ) {
 
 
-            FastHashMap.Entry<String, Geometry> g = it.next();
-            String gid = (String) g.getKey();
-            Geometry geom = (Geometry) g.getValue();
-            Integer ii = geom.instancesCount;
-            String material = null;
-            if (materials.containsKey(geom.material)) {
-                material = (String) materials.get(geom.material);
+                FastHashMap.Entry<String, Geometry> g = it.next();
+                String gid = (String) g.getKey();
+                Geometry geom = (Geometry) g.getValue();
+                Integer ii = geom.instancesCount;
+                String material = null;
+                if (materials.containsKey(geom.material)) {
+                    material = (String) materials.get(geom.material);
+                }
+
+                api.parameter("transform", transformation);
+                if ( material != null ) {
+                    api.parameter("shaders", new String[]{material});
+                }
+                api.instance(gid + "." + ii.toString() + ".instance", gid);
+
+                // instance counter
+                geom.instancesCount = ii+1;
             }
-
-            api.parameter("transform", transformation);
-            if ( material != null ) {
-                api.parameter("shaders", new String[]{material});
-            }
-            api.instance(gid + "." + ii.toString() + ".instance", gid);
-
-            // instance counter
-            geom.instancesCount = ii+1;
+        } catch (Exception e) {
+            UI.printError(Module.GEOM, "Error instantiating mesh: %s ...", geometryId);
         }
     }
 
@@ -505,6 +521,7 @@ public class DAEParser implements SceneParser {
                 NodeList inputs = (NodeList) trisEl.getElementsByTagName("input");
                 Integer offset  = inputs.getLength();
 
+                int normalsType  = FACE;
                 float[] vertices = null;
                 float[] normals  = null;
                 float[] texcoord = null;
@@ -556,6 +573,13 @@ public class DAEParser implements SceneParser {
                             normalsFloats[j*3+2] = normals[nix*3+2];
                         }
                     }
+                } else {
+                    try {
+                        String normalDataId = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/vertices/input[@semantic='NORMAL']/@source", dae).substring(1);
+                        normals = parseFloats(xpath.evaluate(getGeometrySourceQuery(geometryId, normalDataId), dae));
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
 
                 float[] texcoordFloats = null;
@@ -574,7 +598,11 @@ public class DAEParser implements SceneParser {
                 api.parameter("triangles", trianglesOut);
                 api.parameter("points", "point", "vertex", vertices);
                 if (normals != null) {
-                    api.parameter("normals", "vector", "facevarying", normalsFloats);
+                    if (normalsType == FACE) {
+                        api.parameter("normals", "vector", "facevarying", normalsFloats);
+                    } else if (normalsType == VERTEX) {
+                        api.parameter("normals", "vector", "vertex", normals);
+                    }
                 }
                 if (texcoord != null && texcoordFloats != null) {
                     api.parameter("uvs", "texcoord", "vertex", texcoordFloats);
@@ -587,18 +615,9 @@ public class DAEParser implements SceneParser {
             return geoms;
 
         } catch(Exception e) {
+            e.printStackTrace();
             UI.printError(Module.GEOM, "Error reading mesh: %s ...", geometryId);
             return null;
-        }
-    }
-
-    private class Geometry {
-        public String material;
-        public int instancesCount;
-
-        public Geometry(String mat, int c) {
-            material = mat;
-            instancesCount = c;
         }
     }
 
