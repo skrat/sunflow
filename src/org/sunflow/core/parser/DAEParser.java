@@ -577,9 +577,7 @@ public class DAEParser implements SceneParser {
                     try {
                         String normalDataId = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/vertices/input[@semantic='NORMAL']/@source", dae).substring(1);
                         normals = parseFloats(xpath.evaluate(getGeometrySourceQuery(geometryId, normalDataId), dae));
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
+                    } catch (Exception e) { }
                 }
 
                 float[] texcoordFloats = null;
