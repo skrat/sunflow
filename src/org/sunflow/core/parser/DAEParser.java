@@ -645,21 +645,37 @@ public class DAEParser implements SceneParser {
                             texture = getTexture(effectId, df);
                         }
 
-                        float[] sf = (float[]) shaderParams.get("specular");
-                        float rf = ((float[]) shaderParams.get("reflectivity"))[0];
+                        float rf = 0.0f;
+                        try {
+                            rf = ((float[]) shaderParams.get("reflectivity"))[0];
+                        } catch (Exception e) { }
+
                         if (rf > 0.0f) {
-                            if (texture != null) {
-                                api.parameter("diffuse.texture", texture);
-                                api.parameter("diffuse.blend", 1.0f);
-                            }
-                            api.parameter("specular", null, new Color(sf[0],sf[1],sf[3]).getRGB());
-                            api.parameter("glossyness", 1.0f-rf);
+                            try {
+                                float[] sf = (float[]) shaderParams.get("specular");
+                                api.parameter("specular", null, new Color(sf[0],sf[1],sf[2]).getRGB());
+                            } catch (Exception e) { }
+                            try {
+                                float[] pf = (float[]) shaderParams.get("shininess");
+                                api.parameter("power", pf[0]);
+                            } catch (Exception e) { }
+                            api.parameter("shiny", rf);
                             api.parameter("samples", 0); // TODO: fix this
-                            api.shader(materialId, "uber");
+                            if (texture != null) {
+                                api.parameter("texture", texture);
+                                api.shader(materialId, "textured_phong");
+                            } else {
+                                api.shader(materialId, "shiny_phong");
+                            }
                         } else {
-                            float[] pf = (float[]) shaderParams.get("shininess");
-                            api.parameter("specular", null, new Color(sf[0],sf[1],sf[3]).getRGB());
-                            api.parameter("power", pf[0]);
+                            try {
+                                float[] sf = (float[]) shaderParams.get("specular");
+                                api.parameter("specular", null, new Color(sf[0],sf[1],sf[2]).getRGB());
+                            } catch (Exception e) { }
+                            try {
+                                float[] pf = (float[]) shaderParams.get("shininess");
+                                api.parameter("power", pf[0]);
+                            } catch (Exception e) { }
                             api.parameter("samples", 0); // TODO: fix this
                             if (texture != null) {
                                 api.parameter("texture", texture);

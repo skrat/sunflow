@@ -91,6 +91,7 @@ import org.sunflow.core.shader.PhongShader;
 import org.sunflow.core.shader.PrimIDShader;
 import org.sunflow.core.shader.QuickGrayShader;
 import org.sunflow.core.shader.ShinyDiffuseShader;
+import org.sunflow.core.shader.ShinyPhongShader;
 import org.sunflow.core.shader.SimpleShader;
 import org.sunflow.core.shader.TexturedAmbientOcclusionShader;
 import org.sunflow.core.shader.TexturedDiffuseShader;
@@ -186,6 +187,7 @@ public final class PluginRegistry {
         shaderPlugins.registerPlugin("mirror", MirrorShader.class);
         shaderPlugins.registerPlugin("phong", PhongShader.class);
         shaderPlugins.registerPlugin("shiny_diffuse", ShinyDiffuseShader.class);
+        shaderPlugins.registerPlugin("shiny_phong", ShinyPhongShader.class);
         shaderPlugins.registerPlugin("uber", UberShader.class);
         shaderPlugins.registerPlugin("ward", AnisotropicWardShader.class);
         shaderPlugins.registerPlugin("wireframe", WireframeShader.class);
