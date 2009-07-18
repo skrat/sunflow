@@ -43,10 +43,19 @@ public class DAEParser implements SceneParser {
     private FastHashMap<Node, Matrix4> transformCache;
     private LinkedList<String> shaderCache;
     private FastHashMap<String, Document> documentCache;
+
+    private String actualSceneId; // TODO: handle multiple scenes
+
     private static int FACE = 11;
     private static int VERTEX = 12;
 
-    private String actualSceneId; // TODO: handle multiple scenes
+    public static String SCHEMA_LANGUAGE =
+    "http://java.sun.com/xml/jaxp/properties/schemaLanguage",
+                         XML_SCHEMA =
+    "http://www.w3.org/2001/XMLSchema",
+                         SCHEMA_SOURCE =
+    "http://java.sun.com/xml/jaxp/properties/schemaSource";
+
 
     private class Geometry {
         public String material;
@@ -68,7 +77,9 @@ public class DAEParser implements SceneParser {
         Timer timer = new Timer();
         timer.start();
         try {
-            parser = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+            DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+            parser = f.newDocumentBuilder();
+
             dae = parser.parse(new File(filename));
             actualSceneId = getSceneId(dae);
             camera = null;
@@ -455,9 +466,9 @@ public class DAEParser implements SceneParser {
         Element parent = (Element) nodeInstance.getParentNode();
         UI.printInfo(Module.GEOM, "Expanding node: %s ...", nodeId);
 
-        Element node = getElement(nodeId);
+        Element node = getElement(nodeInstance, "node", nodeId);
         if (node != null) {
-            Element cnode   = (Element) node.cloneNode(true);
+            Element cnode = (Element) node.cloneNode(true);
             cnode.setAttribute("id", node.getAttribute("id")+"_"+Integer.toString(nodeInstance.hashCode()));
             parent.appendChild(cnode);
         }
@@ -766,29 +777,45 @@ public class DAEParser implements SceneParser {
         }
     }
 
-    private Element getElement(String id) {
+    private Element getElement(Element source, String name, String id) {
         try {
-            if (id.substring(1,1).equals("#")) {
+            if (id.startsWith("#")) {
                 // Local resource
-                String elementId = id.substring(1);
-                return dae.getElementById(elementId);
+                Document doc = getDocument(source);
+                Element result = (Element) xpath.evaluate(String.format("//%s[@id='%s']", name, id.substring(1)), doc, XPathConstants.NODE);
+                return (Element) dae.importNode(result, true);
             } else {
                 // External resource
                 UI.printInfo(Module.GEOM, "Loading external resource: %s", id);
-                Element result = null;
+                Element result = dae.createElement("node");
+
+                String location = null;
+                String foreignId = null;
                 if (id.contains("#")) {
+                    String[] ids = id.split("#");
+                    location = api.resolveIncludeFilename(ids[0]);
+                    foreignId = ids[1];
+                } else {
+                    location = api.resolveIncludeFilename(id);
+                }
+                result.setAttribute("doc", location);
+
+                // Parse or retrieve document from cache
+                Document doc = null;
+                if (documentCache.containsKey(location)) {
+                    doc = documentCache.get(location);
+                } else {
+                    doc = parser.parse(location);
+                    documentCache.put(location, doc);
+                }
+
+                if (foreignId != null) {
                     // import resource
+                    Node docNode = (Node) xpath.evaluate(String.format("//%s[@id='%s']", name, foreignId), doc, XPathConstants.NODE);
+                    Node adoptedNode = dae.importNode(docNode, true);
+                    result.appendChild(adoptedNode);
                 } else {
                     // import main scene as node
-                    result = dae.createElement("node");
-                    String location = api.resolveIncludeFilename(id);
-                    Document doc = null;
-                    if (documentCache.containsKey(location)) {
-                        doc = documentCache.get(location);
-                    } else {
-                        doc = parser.parse(location);
-                        documentCache.put(location, doc);
-                    }
                     String sceneId = getSceneId(doc);
 
                     Node scene = (Node) xpath.evaluate(getSceneQuery(sceneId), doc, XPathConstants.NODE);
@@ -796,8 +823,7 @@ public class DAEParser implements SceneParser {
                         Node nextChild = childNode.getNextSibling();
 
                         if (childNode.getNodeType() == Node.ELEMENT_NODE) {
-                            Element adoptedNode = (Element) dae.adoptNode(childNode.cloneNode(true));
-                            adoptedNode.setAttribute("doc",location);
+                            Node adoptedNode = dae.importNode(childNode, true);
                             result.appendChild(adoptedNode);
                         }
 
@@ -820,6 +846,7 @@ public class DAEParser implements SceneParser {
                 String loc = ((Element) n).getAttribute("doc");
                 if ( !loc.equals("") ) {
                     result = (Document) documentCache.get(loc);
+                    return result;
                 }
             } catch(Exception e) { }
         }
