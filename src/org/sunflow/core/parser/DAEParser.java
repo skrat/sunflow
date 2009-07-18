@@ -19,6 +19,7 @@ import org.w3c.dom.Node;
 import org.sunflow.SunflowAPI;
 import org.sunflow.SunflowAPIInterface;
 import org.sunflow.core.SceneParser;
+import org.sunflow.system.Timer;
 import org.sunflow.system.UI;
 import org.sunflow.system.UI.Module;
 import org.sunflow.math.Matrix4;
@@ -31,15 +32,17 @@ import org.sunflow.util.FastHashMap;
 
 public class DAEParser implements SceneParser {
 
-    private SunflowAPIInterface api;
+    private SunflowAPI api;
     private Document dae;
     private XPath xpath;
+    private DocumentBuilder parser;
     private String camera;
 
     private FastHashMap<String, FastHashMap<String, Geometry>> geometryCache;
     private FastHashMap<String, Integer> lightCache;
     private FastHashMap<Node, Matrix4> transformCache;
     private LinkedList<String> shaderCache;
+    private FastHashMap<String, Document> documentCache;
     private static int FACE = 11;
     private static int VERTEX = 12;
 
@@ -60,12 +63,14 @@ public class DAEParser implements SceneParser {
     }
 
     public boolean parse(String filename, SunflowAPIInterface api) {
-        this.api = api;
-        UI.printInfo(Module.GEOM, "COLLADA - Parsing file: %s ...", filename);
+        this.api = (SunflowAPI) api;
+        UI.printInfo(Module.API, "COLLADA - Parsing file: %s ...", filename);
+        Timer timer = new Timer();
+        timer.start();
         try {
-            DocumentBuilder parser = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+            parser = DocumentBuilderFactory.newInstance().newDocumentBuilder();
             dae = parser.parse(new File(filename));
-            actualSceneId = getSceneId();
+            actualSceneId = getSceneId(dae);
             camera = null;
 
             setImage();
@@ -85,6 +90,9 @@ public class DAEParser implements SceneParser {
             e.printStackTrace();
             UI.printError(Module.GEOM, "COLLADA - Can't read DAE file \"%s\" - IO error", filename);
         }
+        timer.end();
+        UI.printInfo(Module.API, "Done parsing.");
+        UI.printInfo(Module.API, "Parsing time: %s", timer.toString());
         return true;
     }
 
@@ -330,88 +338,6 @@ public class DAEParser implements SceneParser {
         api.options(SunflowAPI.DEFAULT_OPTIONS);
     }
 
-    private void loadScene() {
-        geometryCache = new FastHashMap<String, FastHashMap<String, Geometry>>();
-        shaderCache = new LinkedList<String>();
-        lightCache = new FastHashMap<String, Integer>();
-        transformCache = new FastHashMap<Node, Matrix4>();
-
-        try {
-            Element scene = (Element) xpath.evaluate(getSceneQuery(actualSceneId), dae, XPathConstants.NODE);
-            parseNode(scene);
-
-        } catch (XPathExpressionException e) {
-            UI.printError(Module.SCENE, "Error loading nodes: are there any?");
-        }
-    }
-
-    private void parseNode(Element node) {
-        String nodeId = node.getAttribute("id");
-        Matrix4 transformation = null;
-        if ( transformCache.containsKey(node) ) {
-            transformation = transformCache.get(node);
-        } else {
-            transformation = transform(node);
-            transformCache.put(node, transformation);
-        }
-
-        for (Node childNode = node.getFirstChild(); childNode != null;) {
-            Node nextChild = childNode.getNextSibling();
-
-            if (childNode.getNodeType() == Node.ELEMENT_NODE) {
-                Element child = (Element) childNode;
-                String tagname = child.getTagName();
-
-                // CAMERA INSTANCE (only 1)
-                if (tagname.equals("instance_camera") && this.camera == null) {
-                    this.camera = child.getAttribute("url").substring(1);
-                    setCamera(transformation);
-
-                // GEOMETRY INSTANCE
-                } else if (tagname.equals("instance_geometry")) {
-                    String id = child.getAttribute("url").substring(1);
-                    if ( !geometryCache.containsKey(id) ) {
-                        geometryCache.put(id, loadGeometry(id));
-                    }
-                    instantiateGeometry(child, transformation, id);
-
-                // LIGHT INSTANCE
-                } else if (tagname.equals("instance_light")) {
-                    String id = child.getAttribute("url").substring(1);
-                    if ( !lightCache.containsKey(id) ) {
-                        lightCache.put(id,0);
-                    }
-                    instantiateLight(child, transformation, id);
-
-                // NODE INSTANCE
-                } else if (tagname.equals("instance_node")) {
-                    expandNodeInstance(child);
-                // NODE
-                } else if (tagname.equals("node")) {
-                    parseNode(child);
-                }
-            }
-
-            childNode = nextChild;
-        }
-    }
-
-    private Element expandNodeInstance(Element nodeInstance) {
-        String nodeId = nodeInstance.getAttribute("url").substring(1);
-        Element parent = (Element) nodeInstance.getParentNode();
-        UI.printInfo(Module.GEOM, "Expanding node: %s ...", nodeId);
-        try {
-            Element libnode = (Element) xpath.evaluate(getNodeQuery(nodeId), dae, XPathConstants.NODE);
-            Element cnode   = (Element) libnode.cloneNode(true);
-            cnode.setAttribute("id", libnode.getAttribute("id")+"_"+Integer.toString(nodeInstance.hashCode()));
-            parent.appendChild(cnode);
-            return cnode;
-        } catch (XPathExpressionException e) {
-            UI.printError(Module.GEOM, "Error expanding node: %s", nodeId);
-            return null;
-        }
-    }
-
     private void setCamera(Matrix4 transform) {
         try {
             String cameraId = this.camera;
@@ -457,6 +383,86 @@ public class DAEParser implements SceneParser {
         }
     }
 
+    private void loadScene() {
+        geometryCache  = new FastHashMap<String, FastHashMap<String, Geometry>>();
+        shaderCache    = new LinkedList<String>();
+        lightCache     = new FastHashMap<String, Integer>();
+        transformCache = new FastHashMap<Node, Matrix4>();
+        documentCache  = new FastHashMap<String, Document>();
+
+        try {
+            Element scene = (Element) xpath.evaluate(getSceneQuery(actualSceneId), dae, XPathConstants.NODE);
+            parseNode(scene);
+
+        } catch (XPathExpressionException e) {
+            UI.printError(Module.SCENE, "Error loading nodes: are there any?");
+        }
+    }
+
+    private void parseNode(Element node) {
+        String nodeId = node.getAttribute("id");
+        Matrix4 transformation = null;
+        if ( transformCache.containsKey(node) ) {
+            transformation = transformCache.get(node);
+        } else {
+            transformation = transform(node);
+            transformCache.put(node, transformation);
+        }
+
+        for (Node childNode = node.getFirstChild(); childNode != null;) {
+            Node nextChild = childNode.getNextSibling();
+
+            if (childNode.getNodeType() == Node.ELEMENT_NODE) {
+                Element child = (Element) childNode;
+                String tagname = child.getTagName();
+
+                // CAMERA INSTANCE (only 1)
+                if (tagname.equals("instance_camera") && this.camera == null) {
+                    this.camera = child.getAttribute("url").substring(1);
+                    setCamera(transformation);
+
+                // GEOMETRY INSTANCE
+                } else if (tagname.equals("instance_geometry")) {
+                    String id = child.getAttribute("url").substring(1);
+                    if ( !geometryCache.containsKey(id) ) {
+                        geometryCache.put(id, loadGeometry(id, getDocument(child)));
+                    }
+                    instantiateGeometry(child, transformation, id);
+
+                // LIGHT INSTANCE
+                } else if (tagname.equals("instance_light")) {
+                    String id = child.getAttribute("url").substring(1);
+                    if ( !lightCache.containsKey(id) ) {
+                        lightCache.put(id,0);
+                    }
+                    instantiateLight(child, transformation, id);
+
+                // NODE INSTANCE
+                } else if (tagname.equals("instance_node")) {
+                    expandNodeInstance(child);
+                // NODE
+                } else if (tagname.equals("node")) {
+                    parseNode(child);
+                }
+            }
+
+            childNode = nextChild;
+        }
+    }
+
+    private void expandNodeInstance(Element nodeInstance) {
+        String nodeId = nodeInstance.getAttribute("url");
+        Element parent = (Element) nodeInstance.getParentNode();
+        UI.printInfo(Module.GEOM, "Expanding node: %s ...", nodeId);
+
+        Element node = getElement(nodeId);
+        if (node != null) {
+            Element cnode   = (Element) node.cloneNode(true);
+            cnode.setAttribute("id", node.getAttribute("id")+"_"+Integer.toString(nodeInstance.hashCode()));
+            parent.appendChild(cnode);
+        }
+    }
+    
     private void instantiateGeometry(Element instance, Matrix4 transformation, String geometryId) {
         UI.printInfo(Module.GEOM, "Instantiating mesh: %s ...", geometryId);
 
@@ -473,7 +479,7 @@ public class DAEParser implements SceneParser {
                     materials.put(symbol, materialId);
 
                     if ( !shaderCache.contains(materialId) ) {
-                        loadShader(materialId);
+                        loadShader(materialId, getDocument(instance));
                         shaderCache.add(materialId);
                     }
                 }
@@ -481,7 +487,6 @@ public class DAEParser implements SceneParser {
 
             Iterator<FastHashMap.Entry<String, Geometry>> it = geoms.iterator();
             while ( it.hasNext() ) {
-
 
                 FastHashMap.Entry<String, Geometry> g = it.next();
                 String gid = (String) g.getKey();
@@ -506,10 +511,10 @@ public class DAEParser implements SceneParser {
         }
     }
 
-    private FastHashMap<String, Geometry> loadGeometry(String geometryId) {
+    private FastHashMap<String, Geometry> loadGeometry(String geometryId, Document doc) {
         UI.printInfo(Module.GEOM, "Reading mesh: %s ...", geometryId);
         try {
-            NodeList trianglesList = (NodeList) xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/triangles", dae, XPathConstants.NODESET);
+            NodeList trianglesList = (NodeList) xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/triangles", doc, XPathConstants.NODESET);
             int trianglesNum = trianglesList.getLength();
             int[] triangles = null;
             FastHashMap<String, Geometry> geoms = new FastHashMap<String, Geometry>();
@@ -530,14 +535,14 @@ public class DAEParser implements SceneParser {
                     String semantic = in.getAttribute("semantic");
                     String sourceId = in.getAttribute("source").substring(1);
                     if ( semantic.equals("VERTEX") ) {
-                        String vertexDataId = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/vertices/input[@semantic='POSITION']/@source", dae).substring(1);
-                        String vertexData = xpath.evaluate(getGeometrySourceQuery(geometryId, vertexDataId), dae);
+                        String vertexDataId = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/vertices/input[@semantic='POSITION']/@source", doc).substring(1);
+                        String vertexData = xpath.evaluate(getGeometrySourceQuery(geometryId, vertexDataId), doc);
                         vertices = parseFloats(vertexData);
                     } else if ( semantic.equals("NORMAL") ) {
-                        String normalData = xpath.evaluate(getGeometrySourceQuery(geometryId, sourceId), dae);
+                        String normalData = xpath.evaluate(getGeometrySourceQuery(geometryId, sourceId), doc);
                         normals = parseFloats(normalData);
                     } else if ( semantic.equals("TEXCOORD") ) {
-                        String texcoordData = xpath.evaluate(getGeometrySourceQuery(geometryId, sourceId), dae);
+                        String texcoordData = xpath.evaluate(getGeometrySourceQuery(geometryId, sourceId), doc);
                         texcoord = parseFloats(texcoordData);
                     }
                 }
@@ -575,8 +580,8 @@ public class DAEParser implements SceneParser {
                     }
                 } else {
                     try {
-                        String normalDataId = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/vertices/input[@semantic='NORMAL']/@source", dae).substring(1);
-                        normals = parseFloats(xpath.evaluate(getGeometrySourceQuery(geometryId, normalDataId), dae));
+                        String normalDataId = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/vertices/input[@semantic='NORMAL']/@source", doc).substring(1);
+                        normals = parseFloats(xpath.evaluate(getGeometrySourceQuery(geometryId, normalDataId), doc));
                     } catch (Exception e) { }
                 }
 
@@ -619,10 +624,10 @@ public class DAEParser implements SceneParser {
         }
     }
 
-    private void loadShader(String materialId) {
+    private void loadShader(String materialId, Document doc) {
         try {
-            String effectId = xpath.evaluate(getMaterialQuery(materialId)+"/instance_effect/@url", dae).substring(1);
-            Node technique = (Node) xpath.evaluate(getEffectQuery(effectId)+"/profile_COMMON/technique", dae, XPathConstants.NODE);
+            String effectId = xpath.evaluate(getMaterialQuery(materialId)+"/instance_effect/@url", doc).substring(1);
+            Node technique = (Node) xpath.evaluate(getEffectQuery(effectId)+"/profile_COMMON/technique", doc, XPathConstants.NODE);
             for (Node childNode = technique.getFirstChild(); childNode != null;) {
                 Node nextChild = childNode.getNextSibling();
 
@@ -659,12 +664,13 @@ public class DAEParser implements SceneParser {
                                 float[] pf = (float[]) shaderParams.get("shininess");
                                 api.parameter("power", pf[0]);
                             } catch (Exception e) { }
-                            api.parameter("shiny", rf);
                             api.parameter("samples", 0); // TODO: fix this
                             if (texture != null) {
+                                // TODO: textured shiny phong
                                 api.parameter("texture", texture);
                                 api.shader(materialId, "textured_phong");
                             } else {
+                                api.parameter("shiny", rf);
                                 api.shader(materialId, "shiny_phong");
                             }
                         } else {
@@ -699,13 +705,11 @@ public class DAEParser implements SceneParser {
                             api.parameter("texture", getTexture(effectId, df));
                             api.shader(materialId, "textured_diffuse");
                         }
-
                     }
                 }
 
                 childNode = nextChild;
             }
-
         } catch(Exception e) {
             e.printStackTrace();
             UI.printError(Module.GEOM, "Error reading material: %s ...", materialId);
@@ -762,39 +766,64 @@ public class DAEParser implements SceneParser {
         }
     }
 
-    private FastHashMap<String, Object> getParams(Element el) {
-        FastHashMap<String, Object> result = new FastHashMap<String, Object>();
-        for (Node childNode = el.getFirstChild(); childNode != null;) {
-            Node nextChild = childNode.getNextSibling();
-
-            if (childNode.getNodeType() == Node.ELEMENT_NODE) {
-                Element child  = (Element) childNode;
-                String tagname = child.getTagName();
-                String value   = child.getTextContent();
-
-                try {
-                    result.put(tagname, parseFloats(value));
-                } catch (NumberFormatException e) {
-                    result.put(tagname, child);
-                }
-            }
-
-            childNode = nextChild;
-        }
-        return result;
-    }
-
-    private String getTexture(String effectId, Element param) {
+    private Element getElement(String id) {
         try {
-            String texture = ((Element) param.getElementsByTagName("texture").item(0)).getAttribute("texture");
-            String surface = xpath.evaluate(getEffectQuery(effectId)+String.format("/profile_COMMON/newparam[@sid='%s']/sampler2D/source/text()", texture), dae);
-            String image   = xpath.evaluate(getEffectQuery(effectId)+String.format("/profile_COMMON/newparam[@sid='%s']/surface[@type='2D']/init_from/text()", surface), dae);
-            return xpath.evaluate(getImageQuery(image), dae).trim();
-        } catch (Exception e) {
+            if (id.substring(1,1).equals("#")) {
+                // Local resource
+                String elementId = id.substring(1);
+                return dae.getElementById(elementId);
+            } else {
+                // External resource
+                UI.printInfo(Module.GEOM, "Loading external resource: %s", id);
+                Element result = null;
+                if (id.contains("#")) {
+                    // import resource
+                } else {
+                    // import main scene as node
+                    result = dae.createElement("node");
+                    String location = api.resolveIncludeFilename(id);
+                    Document doc = null;
+                    if (documentCache.containsKey(location)) {
+                        doc = documentCache.get(location);
+                    } else {
+                        doc = parser.parse(location);
+                        documentCache.put(location, doc);
+                    }
+                    String sceneId = getSceneId(doc);
+
+                    Node scene = (Node) xpath.evaluate(getSceneQuery(sceneId), doc, XPathConstants.NODE);
+                    for (Node childNode = scene.getFirstChild(); childNode!=null;) {
+                        Node nextChild = childNode.getNextSibling();
+
+                        if (childNode.getNodeType() == Node.ELEMENT_NODE) {
+                            Element adoptedNode = (Element) dae.adoptNode(childNode.cloneNode(true));
+                            adoptedNode.setAttribute("doc",location);
+                            result.appendChild(adoptedNode);
+                        }
+
+                        childNode = nextChild;
+                    }
+                }
+                return result;
+            }
+        } catch(Exception e) {
             e.printStackTrace();
-            UI.printError(Module.GEOM, "Error reading texture: for effect %s ...", effectId);
+            UI.printError(Module.API, "Error loading external resource: %s ...", id);
             return null;
         }
+    }
+
+    private Document getDocument(Node subject) {
+        Document result = dae;
+        for(Node n = subject; n != null; n = n.getParentNode()) {
+            try {
+                String loc = ((Element) n).getAttribute("doc");
+                if ( !loc.equals("") ) {
+                    result = (Document) documentCache.get(loc);
+                }
+            } catch(Exception e) { }
+        }
+        return result;
     }
 
     private Matrix4 transform(Element node) {
@@ -864,6 +893,41 @@ public class DAEParser implements SceneParser {
         return result;
     }
 
+    private FastHashMap<String, Object> getParams(Element el) {
+        FastHashMap<String, Object> result = new FastHashMap<String, Object>();
+        for (Node childNode = el.getFirstChild(); childNode != null;) {
+            Node nextChild = childNode.getNextSibling();
+
+            if (childNode.getNodeType() == Node.ELEMENT_NODE) {
+                Element child  = (Element) childNode;
+                String tagname = child.getTagName();
+                String value   = child.getTextContent();
+
+                try {
+                    result.put(tagname, parseFloats(value));
+                } catch (NumberFormatException e) {
+                    result.put(tagname, child);
+                }
+            }
+
+            childNode = nextChild;
+        }
+        return result;
+    }
+
+    private String getTexture(String effectId, Element param) {
+        try {
+            String texture = ((Element) param.getElementsByTagName("texture").item(0)).getAttribute("texture");
+            String surface = xpath.evaluate(getEffectQuery(effectId)+String.format("/profile_COMMON/newparam[@sid='%s']/sampler2D/source/text()", texture), dae);
+            String image   = xpath.evaluate(getEffectQuery(effectId)+String.format("/profile_COMMON/newparam[@sid='%s']/surface[@type='2D']/init_from/text()", surface), dae);
+            return xpath.evaluate(getImageQuery(image), dae).trim();
+        } catch (Exception e) {
+            e.printStackTrace();
+            UI.printError(Module.GEOM, "Error reading texture: for effect %s ...", effectId);
+            return null;
+        }
+    }
+
     private Color getBackgroundColor(String sceneId) {
         try {
             String colorString = xpath.evaluate(getSunflowSceneQuery(sceneId)+"/background/color", dae);
@@ -887,8 +951,8 @@ public class DAEParser implements SceneParser {
         }
     }
 
-    private String getSceneId() throws XPathExpressionException {
-        return xpath.evaluate("/COLLADA/scene/instance_visual_scene/@url", dae).substring(1); 
+    private String getSceneId(Document doc) throws XPathExpressionException {
+        return xpath.evaluate("/COLLADA/scene/instance_visual_scene/@url", doc).substring(1); 
     }
 
     private String getSceneQuery(String sceneId) {

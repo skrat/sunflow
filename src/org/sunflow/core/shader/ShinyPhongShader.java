@@ -52,11 +52,12 @@ public class ShinyPhongShader implements Shader {
         refDir.y = (dn * state.getNormal().y) + state.getRay().getDirection().y;
         refDir.z = (dn * state.getNormal().z) + state.getRay().getDirection().z;
         Ray refRay = new Ray(state.getPoint(), refDir);
+
         // compute Fresnel term
         cos = 1 - cos;
         float cos2 = cos * cos;
         float cos5 = cos2 * cos2 * cos;
-        //
+
         Color ret = Color.white();
         Color r = d.copy().mul(refl);
         ret.sub(r);

@@ -122,6 +122,7 @@ import org.sunflow.image.writers.HDRBitmapWriter;
 import org.sunflow.image.writers.IGIBitmapWriter;
 import org.sunflow.image.writers.PNGBitmapWriter;
 import org.sunflow.image.writers.TGABitmapWriter;
+import org.sunflow.image.writers.JPGBitmapWriter;
 import org.sunflow.system.Plugins;
 
 /**
@@ -324,5 +325,6 @@ public final class PluginRegistry {
         bitmapWriterPlugins.registerPlugin("tga", TGABitmapWriter.class);
         bitmapWriterPlugins.registerPlugin("exr", EXRBitmapWriter.class);
         bitmapWriterPlugins.registerPlugin("igi", IGIBitmapWriter.class);
+        bitmapWriterPlugins.registerPlugin("jpg", JPGBitmapWriter.class);
     }
 }
