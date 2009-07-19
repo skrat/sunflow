@@ -165,7 +165,7 @@ public class DAEParser implements SceneParser {
                 }
             } catch(Exception e) { }
 
-        } catch(XPathExpressionException e) { }
+        } catch(Exception e) { }
 
         api.options(SunflowAPI.DEFAULT_OPTIONS);
     }
@@ -182,6 +182,46 @@ public class DAEParser implements SceneParser {
     }
 
     private void setSunsky() {
+        try {
+            Element sunskyElement = (Element) xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/sunsky", dae, XPathConstants.NODE);
+            FastHashMap<String, Object> sunsky = getParams(sunskyElement);
+
+            try {
+                float[] up = (float[]) sunsky.get("up");
+                api.parameter("up", new Vector3(up[0],up[1],up[2]));
+            } catch(Exception e) { }
+
+            try {
+                float[] east = (float[]) sunsky.get("east");
+                api.parameter("east", new Vector3(east[0],east[1],east[2]));
+            } catch(Exception e) { }
+
+            try {
+                float[] sundir = (float[]) sunsky.get("sundir");
+                api.parameter("sundir", new Vector3(sundir[0],sundir[1],sundir[2]));
+            } catch(Exception e) { }
+
+            try {
+                api.parameter("turbidity", ((float[]) sunsky.get("turbidity"))[0]);
+            } catch(Exception e) { }
+
+            try {
+                api.parameter("samples", (int)((float[]) sunsky.get("samples"))[0]);
+            } catch(Exception e) { }
+
+            try {
+                String extendsky = ((Element) sunsky.get("ground_extendsky")).getTextContent().trim();
+                api.parameter("ground.extendsky", Boolean.valueOf(extendsky).booleanValue());
+            } catch(Exception e) { }
+
+            try {
+                float[] ground = (float[]) sunsky.get("ground");
+                api.parameter("ground.color", null, new Color(ground[0],ground[1],ground[2]).getRGB());
+            } catch(Exception e) { }
+
+            api.light("sunsky", "sunsky");
+
+        } catch(Exception e) { }
     }
 
     private void setGlobalIllumination() {
@@ -295,7 +335,7 @@ public class DAEParser implements SceneParser {
                 } catch(Exception e) { }
 
             }
-        } catch(XPathExpressionException e) {
+        } catch(Exception e) {
             api.parameter("gi.engine", "none");
         }
         api.options(SunflowAPI.DEFAULT_OPTIONS);
@@ -303,25 +343,23 @@ public class DAEParser implements SceneParser {
 
     private void setTraceDepths() {
         try {
-            String diff = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/trace_depths/diffuse/text()", dae);
-            if (diff != "") {
-                api.parameter("depths.diffuse", Integer.parseInt(diff.trim()));
-            }
-        } catch(XPathExpressionException e) { }
+            Element depthsElement = (Element) xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/trace_depths", dae, XPathConstants.NODE);
+            FastHashMap<String, Object> depths = getParams(depthsElement);
 
-        try {
-            String refl = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/trace_depths/reflection/text()", dae);
-            if (refl != "") {
-                api.parameter("depths.reflection", Integer.parseInt(refl.trim()));
-            }
-        } catch(XPathExpressionException e) { }
+            try {
+                api.parameter("depths.diffuse", (int)((float[]) depths.get("diffuse"))[0]);
+            } catch(Exception e) { }
 
-        try {
-            String refr = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/trace_depths/refraction/text()", dae);
-            if (refr != "") {
-                api.parameter("depths.refraction", Integer.parseInt(refr.trim()));
-            }
-        } catch(XPathExpressionException e) { }
+            try {
+                api.parameter("depths.reflection", (int)((float[]) depths.get("reflection"))[0]);
+            } catch(Exception e) { }
+
+            try {
+                api.parameter("depths.refraction", (int)((float[]) depths.get("refraction"))[0]);
+            } catch(Exception e) { }
+
+        } catch(Exception e) { }
+
         api.options(SunflowAPI.DEFAULT_OPTIONS);
     }
 
@@ -331,17 +369,18 @@ public class DAEParser implements SceneParser {
 
             UI.printInfo(Module.SCENE, "Got camera: %s ...", cameraId);
 
-            Float xfov, yfov, fov;
+            Element opticsElement = (Element) xpath.evaluate(getCameraQuery(cameraId)+"/optics/technique_common/perspective", dae, XPathConstants.NODE);
+            FastHashMap<String, Object> optics = getParams(opticsElement);
+            Float xfov = null,
+                  yfov = null,
+                   fov = null;
+
             try {
-                xfov = Float.parseFloat(xpath.evaluate(getCameraQuery(cameraId)+"/optics/technique_common/perspective/xfov", dae));
-            } catch(Exception e) {
-                xfov = null;
-            }
+                xfov = ((float[]) optics.get("xfov"))[0];
+            } catch(Exception e) { }
             try {
-                yfov = Float.parseFloat(xpath.evaluate(getCameraQuery(cameraId)+"/optics/technique_common/perspective/yfov", dae));
-            } catch(Exception e) {
-                yfov = null;
-            }
+                yfov = ((float[]) optics.get("yfov"))[0];
+            } catch(Exception e) { }
             fov = 0.0f;
             if (xfov != null)  {  fov += xfov;    }
             if (yfov != null)  {  fov += yfov;    }
@@ -349,13 +388,11 @@ public class DAEParser implements SceneParser {
                                {  fov = fov/2.0f; }
             if (fov == 0.0f)   {  fov = 45.0f;    }  // default value
 
-            Float aspectRatio;
+            // default value
+            Float aspectRatio = 1.333f;
             try {
-                aspectRatio = Float.parseFloat(xpath.evaluate(getCameraQuery(cameraId)+"/optics/technique_common/perspective/aspect_ratio", dae));
-            } catch(Exception e) {
-                // default value
-                aspectRatio = 1.333f;
-            }
+                aspectRatio = ((float[]) optics.get("aspect_ratio"))[0];
+            } catch(Exception e) { }
 
             api.parameter("transform", transform);
             api.parameter("fov", fov);
@@ -366,7 +403,7 @@ public class DAEParser implements SceneParser {
 
         } catch(Exception e) {
             UI.printError(Module.SCENE, "Error loading camera: is there any?");
-            UI.printInfo(Module.SCENE, "Using auto-positioned camera instead ...");
+            UI.printInfo(Module.SCENE, "Using auto-positioned camera instead ... (TODO)");
         }
     }
 
@@ -637,21 +674,25 @@ public class DAEParser implements SceneParser {
                             texture = getTexture(effectId, df);
                         }
 
+                        try {
+                            float[] spf = (float[]) shaderParams.get("specular");
+                            api.parameter("specular", null, new Color(spf[0],spf[1],spf[2]).getRGB());
+                        } catch (Exception e) { }
+
+                        try {
+                            float[] shf = (float[]) shaderParams.get("shininess");
+                            api.parameter("power", shf[0]);
+                        } catch (Exception e) { }
+
+                        api.parameter("samples", 0); // TODO: fix this
+
                         float rf = 0.0f;
                         try {
                             rf = ((float[]) shaderParams.get("reflectivity"))[0];
                         } catch (Exception e) { }
 
                         if (rf > 0.0f) {
-                            try {
-                                float[] sf = (float[]) shaderParams.get("specular");
-                                api.parameter("specular", null, new Color(sf[0],sf[1],sf[2]).getRGB());
-                            } catch (Exception e) { }
-                            try {
-                                float[] pf = (float[]) shaderParams.get("shininess");
-                                api.parameter("power", pf[0]);
-                            } catch (Exception e) { }
-                            api.parameter("samples", 0); // TODO: fix this
+                            api.parameter("shiny", rf);
                             if (texture != null) {
                                 // TODO: textured shiny phong
                                 api.parameter("texture", texture);
@@ -661,15 +702,6 @@ public class DAEParser implements SceneParser {
                                 api.shader(materialId, "shiny_phong");
                             }
                         } else {
-                            try {
-                                float[] sf = (float[]) shaderParams.get("specular");
-                                api.parameter("specular", null, new Color(sf[0],sf[1],sf[2]).getRGB());
-                            } catch (Exception e) { }
-                            try {
-                                float[] pf = (float[]) shaderParams.get("shininess");
-                                api.parameter("power", pf[0]);
-                            } catch (Exception e) { }
-                            api.parameter("samples", 0); // TODO: fix this
                             if (texture != null) {
                                 api.parameter("texture", texture);
                                 api.shader(materialId, "textured_phong");
