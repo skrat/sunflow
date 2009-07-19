@@ -86,6 +86,7 @@ public class DAEParser implements SceneParser {
 
             setImage();
             setBackground();
+            setSunsky();
             setGlobalIllumination();
             setTraceDepths();
 
@@ -108,64 +109,62 @@ public class DAEParser implements SceneParser {
     }
 
     private void setImage() {
-        int[] size = getImageDimensions(actualSceneId);
-        if (size != null) {
-            api.parameter("resolutionX", size[0]);
-            api.parameter("resolutionY", size[1]);
-        }
-
         try {
-            String sampler = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/image/sampler/text()", dae);
-            if (sampler != "") {
-                api.parameter("sampler", sampler.trim());
-            }
-        } catch(XPathExpressionException e) { }
+            Element imageElement = (Element) xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/image", dae, XPathConstants.NODE);
+            FastHashMap<String, Object> imageParams = getParams(imageElement);
 
-        try {
-            String aa = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/image/aa/text()", dae);
-            if (aa != "") {
-                String[] aaStrings = aa.trim().split("\\s+");
-                int[] aaInts = new int[2];
-                aaInts[0] = Integer.parseInt(aaStrings[0]);
-                aaInts[1] = Integer.parseInt(aaStrings[1]);
-                api.parameter("aa.min", aaInts[0]);
-                api.parameter("aa.max", aaInts[1]);
-            }
-        } catch(XPathExpressionException e) { }
+            try {
+                float[] size = (float[]) imageParams.get("resolution");
+                if (size != null && size.length == 2) {
+                    api.parameter("resolutionX", (int) size[0]);
+                    api.parameter("resolutionY", (int) size[1]);
+                }
+            } catch(Exception e) { }
 
-        try {
-            String samples = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/image/samples/text()", dae);
-            if (samples != "") {
-                api.parameter("aa.samples", Integer.parseInt(samples.trim()));
-            }
-        } catch(XPathExpressionException e) { }
+            try {
+                String sampler = ((Element) imageParams.get("sampler")).getTextContent();
+                if (sampler != "") {
+                    api.parameter("sampler", sampler.trim());
+                }
+            } catch(Exception e) { }
 
-        try {
-            String contrast = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/image/contrast/text()", dae);
-            if (contrast != "") {
-                api.parameter("aa.contrast", Float.parseFloat(contrast.trim()));
-            }
-        } catch(XPathExpressionException e) { }
+            try {
+                float[] aa = (float[]) imageParams.get("aa");
+                if (aa != null && aa.length == 2) {
+                    api.parameter("aa.min", (int) aa[0]);
+                    api.parameter("aa.max", (int) aa[1]);
+                }
+            } catch(Exception e) { }
 
-        try {
-            String jitter = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/image/jitter/text()", dae);
-            if (jitter != "") {
-                api.parameter("aa.jitter", Boolean.valueOf(jitter).booleanValue());
-            }
-        } catch(XPathExpressionException e) { }
+            try {
+                api.parameter("aa.samples", (int)((float[]) imageParams.get("samples"))[0]);
+            } catch(Exception e) { }
 
-        try {
-            String cache = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/image/cache/text()", dae);
-            if (cache != "") {
-                api.parameter("aa.cache", Boolean.valueOf(cache).booleanValue());
-            }
-        } catch(XPathExpressionException e) { }
+            try {
+                api.parameter("aa.contrast", ((float[]) imageParams.get("contrast"))[0]);
+            } catch(Exception e) { }
 
-        try {
-            String filter = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/image/filter/text()", dae);
-            if (filter != "") {
-                api.parameter("filter", filter.trim());
-            }
+            try {
+                String jitter = ((Element) imageParams.get("jitter")).getTextContent().trim();
+                if (jitter != "") {
+                    api.parameter("aa.jitter", Boolean.valueOf(jitter).booleanValue());
+                }
+            } catch(Exception e) { }
+
+            try {
+                String cache = ((Element) imageParams.get("cache")).getTextContent().trim();
+                if (cache != "") {
+                    api.parameter("aa.cache", Boolean.valueOf(cache).booleanValue());
+                }
+            } catch(Exception e) { }
+
+            try {
+                String filter = ((Element) imageParams.get("filter")).getTextContent().trim();
+                if (filter != "") {
+                    api.parameter("filter", filter);
+                }
+            } catch(Exception e) { }
+
         } catch(XPathExpressionException e) { }
 
         api.options(SunflowAPI.DEFAULT_OPTIONS);
@@ -182,37 +181,35 @@ public class DAEParser implements SceneParser {
         }
     }
 
+    private void setSunsky() {
+    }
+
     private void setGlobalIllumination() {
         try {
-            String type = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/type",dae).trim();
+            Element giElement = (Element) xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi", dae, XPathConstants.NODE);
+            FastHashMap<String, Object> gi = getParams(giElement);
+            String type = ((Element) gi.get("type")).getTextContent();
             if (type.equals("irr-cache")) {
 
                 api.parameter("gi.engine", "irr-cache");
                 try {
-                    String samples = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/samples/text()", dae);
-                    if (samples != "") {
-                        api.parameter("gi.irr-cache.samples", Integer.parseInt(samples.trim()));
-                    }
-                } catch(XPathExpressionException e) { }
+                    api.parameter("gi.irr-cache.samples", (int)((float[]) gi.get("samples"))[0]);
+                } catch(Exception e) { }
 
                 try {
-                    String tolerance = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/tolerance/text()", dae);
-                    if (tolerance != "") {
-                        api.parameter("gi.irr-cache.samples", Float.parseFloat(tolerance.trim()));
-                    }
-                } catch(XPathExpressionException e) { }
+                    api.parameter("gi.irr-cache.tolerance", ((float[]) gi.get("tolerance"))[0]);
+                } catch(Exception e) { }
 
                 try {
-                    String spacing = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/spacing/text()", dae);
-                    if (spacing != "") {
-                        String[] spacingStrings = spacing.trim().split("\\s+");
-                        api.parameter("gi.irr-cache.min_spacing", Float.parseFloat(spacingStrings[0]));
-                        api.parameter("gi.irr-cache.max_spacing", Float.parseFloat(spacingStrings[1]));
+                    float[] spacing = (float[]) gi.get("spacing");
+                    if (spacing != null && spacing.length == 2) {
+                        api.parameter("gi.irr-cache.min_spacing", spacing[0]);
+                        api.parameter("gi.irr-cache.max_spacing", spacing[1]);
                     }
-                } catch(XPathExpressionException e) { }
+                } catch(Exception e) { }
 
                 try {
-                    String global = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/global/text()", dae);
+                    String global = ((Element) gi.get("global")).getTextContent();
                     if (global != "") {
                         String[] globalStrings = global.trim().split("\\s+");
                         api.parameter("gi.irr-cache.gmap.emit", Integer.parseInt(globalStrings[0]));
@@ -220,103 +217,82 @@ public class DAEParser implements SceneParser {
                         api.parameter("gi.irr-cache.gmap.gather", Integer.parseInt(globalStrings[2]));
                         api.parameter("gi.irr-cache.gmap.radius", Float.parseFloat(globalStrings[3]));
                     }
-                } catch(XPathExpressionException e) { }
+                } catch(Exception e) { }
 
             } else if (type.equals("path")) {
 
                 api.parameter("gi.engine", "path");
                 try {
-                    String samples = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/samples/text()", dae);
-                    if (samples != "") {
-                        api.parameter("gi.path.samples", Integer.parseInt(samples.trim()));
-                    }
-                } catch(XPathExpressionException e) { }
+                    api.parameter("gi.path.samples", (int)((float[]) gi.get("samples"))[0]);
+                } catch(Exception e) { }
             
             } else if (type.equals("fake")) {
 
                 api.parameter("gi.engine", "fake");
                 try {
-                    String up = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/up/text()", dae);
-                    if (up != "") {
-                        api.parameter("gi.fake.up", parseVector(up));
+                    float[] up = (float[]) gi.get("up");
+                    if (up != null && up.length == 3) {
+                        api.parameter("gi.fake.up", new Vector3(up[0],up[1],up[2]));
                     }
-                } catch(XPathExpressionException e) { }
+                } catch(Exception e) { }
 
                 try {
-                    String sky = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/sky/text()", dae);
-                    if (sky != null) {
-                        api.parameter("gi.fake.sky", null, parseColor(sky).getRGB());
+                    float[] sky = (float[]) gi.get("sky");
+                    if (sky != null && sky.length == 3) {
+                        api.parameter("gi.fake.sky", null, new Color(sky[0],sky[1],sky[2]).getRGB());
                     }
-                } catch(XPathExpressionException e) { }
+                } catch(Exception e) { }
 
                 try {
-                    String ground = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/ground/text()", dae);
-                    if (ground != null) {
-                        api.parameter("gi.fake.ground", null, parseColor(ground).getRGB());
+                    float[] ground = (float[]) gi.get("ground");
+                    if (ground != null && ground.length == 3) {
+                        api.parameter("gi.fake.ground", null, new Color(ground[0],ground[1],ground[2]).getRGB());
                     }
-                } catch(XPathExpressionException e) { }
+                } catch(Exception e) { }
 
             } else if (type.equals("igi")) {
 
                 api.parameter("gi.engine", "igi");
                 try {
-                    String samples = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/samples/text()", dae);
-                    if (samples != "") {
-                        api.parameter("gi.igi.samples", Integer.parseInt(samples.trim()));
-                    }
-                } catch(XPathExpressionException e) { }
+                    api.parameter("gi.igi.samples", (int)((float[]) gi.get("samples"))[0]);
+                } catch(Exception e) { }
 
                 try {
-                    String sets = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/sets/text()", dae);
-                    if (sets != "") {
-                        api.parameter("gi.igi.sets", Integer.parseInt(sets.trim()));
-                    }
-                } catch(XPathExpressionException e) { }
+                    api.parameter("gi.igi.sets", (int)((float[]) gi.get("sets"))[0]);
+                } catch(Exception e) { }
 
                 try {
-                    String bias = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/bias/text()", dae);
-                    if (bias != "") {
-                        api.parameter("gi.igi.c", Float.parseFloat(bias.trim()));
-                    }
-                } catch(XPathExpressionException e) { }
+                    api.parameter("gi.igi.c", ((float[]) gi.get("bias"))[0]);
+                } catch(Exception e) { }
 
                 try {
-                    String biasSamples = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/bias_samples/text()", dae);
-                    if (biasSamples != "") {
-                        api.parameter("gi.igi.bias_samples", Integer.parseInt(biasSamples.trim()));
-                    }
-                } catch(XPathExpressionException e) { }
+                    api.parameter("gi.igi.bias_samples", (int)((float[]) gi.get("bias_samples"))[0]);
+                } catch(Exception e) { }
 
             } else if (type.equals("ambocc")) {
 
                 api.parameter("gi.engine", "ambocc");
                 try {
-                    String samples = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/samples/text()", dae);
-                    if (samples != "") {
-                        api.parameter("gi.ambocc.samples", Integer.parseInt(samples.trim()));
-                    }
-                } catch(XPathExpressionException e) { }
+                    api.parameter("gi.ambocc.samples", (int)((float[]) gi.get("samples"))[0]);
+                } catch(Exception e) { }
 
                 try {
-                    String bright = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/bright/text()", dae);
+                    float[] bright = (float[]) gi.get("bright");
                     if (bright != null) {
-                        api.parameter("gi.ambocc.bright", null, parseColor(bright).getRGB());
+                        api.parameter("gi.ambocc.bright", null, new Color(bright[0],bright[1],bright[2]).getRGB());
                     }
-                } catch(XPathExpressionException e) { }
+                } catch(Exception e) { }
 
                 try {
-                    String dark = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/dark/text()", dae);
+                    float[] dark = (float[]) gi.get("dark");
                     if (dark != null) {
-                        api.parameter("gi.ambocc.dark", null, parseColor(dark).getRGB());
+                        api.parameter("gi.ambocc.dark", null, new Color(dark[0],dark[1],dark[2]).getRGB());
                     }
-                } catch(XPathExpressionException e) { }
+                } catch(Exception e) { }
 
                 try {
-                    String maxdist = xpath.evaluate(getSunflowSceneQuery(actualSceneId)+"/gi/maxdist/text()", dae);
-                    if (maxdist != "") {
-                        api.parameter("gi.ambocc.maxdist", Float.parseFloat(maxdist.trim()));
-                    }
-                } catch(XPathExpressionException e) { }
+                    api.parameter("gi.ambocc.maxdist", ((float[]) gi.get("maxdist"))[0]);
+                } catch(Exception e) { }
 
             }
         } catch(XPathExpressionException e) {
@@ -960,20 +936,6 @@ public class DAEParser implements SceneParser {
             String colorString = xpath.evaluate(getSunflowSceneQuery(sceneId)+"/background/color", dae);
             return parseColor(colorString);
         } catch(XPathExpressionException e) {
-            return null;
-        }
-    }
-
-    private int[] getImageDimensions(String sceneId) {
-        try {
-            String intsString = xpath.evaluate(getSunflowSceneQuery(sceneId)+"/image/resolution", dae);
-            String[] dimensionsString = intsString.trim().split("\\s+");
-            int[] dimensions = new int[2];
-            dimensions[0] = Integer.parseInt(dimensionsString[0]);
-            dimensions[1] = Integer.parseInt(dimensionsString[1]);
-
-            return dimensions;
-        } catch(Exception e) {
             return null;
         }
     }
