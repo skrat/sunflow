@@ -447,11 +447,14 @@ public class DAEParser implements SceneParser {
 
                 // GEOMETRY INSTANCE
                 } else if (tagname.equals("instance_geometry")) {
-                    String id = child.getAttribute("url").substring(1);
-                    if ( !geometryCache.containsKey(id) ) {
-                        geometryCache.put(id, loadGeometry(id, getDocument(child)));
+                    String url = child.getAttribute("url");
+                    String id  = url.substring(1);
+                    Document doc = getDocument(child);
+                    url = doc.getDocumentURI()+"#"+id;
+                    if ( !geometryCache.containsKey(url) ) {
+                        geometryCache.put(url, loadGeometry(id, doc));
                     }
-                    instantiateGeometry(child, transformation, id);
+                    instantiateGeometry(doc, child, transformation, url);
 
                 // LIGHT INSTANCE
                 } else if (tagname.equals("instance_light")) {
@@ -487,7 +490,7 @@ public class DAEParser implements SceneParser {
         }
     }
     
-    private void instantiateGeometry(Element instance, Matrix4 transformation, String geometryId) {
+    private void instantiateGeometry(Document doc, Element instance, Matrix4 transformation, String geometryId) {
         UI.printInfo(Module.GEOM, "Instantiating mesh: %s ...", geometryId);
 
         try {
@@ -500,11 +503,12 @@ public class DAEParser implements SceneParser {
                     Element imat = (Element) matInstances.item(i);
                     String materialId = imat.getAttribute("target").substring(1);
                     String symbol = imat.getAttribute("symbol");
-                    materials.put(symbol, materialId);
+                    String url = doc.getDocumentURI()+"#"+materialId;
+                    materials.put(symbol, url);
 
-                    if ( !shaderCache.contains(materialId) ) {
-                        loadShader(materialId, getDocument(instance));
-                        shaderCache.add(materialId);
+                    if ( !shaderCache.contains(url) ) {
+                        loadShader(materialId, getDocument(instance), url);
+                        shaderCache.add(url);
                     }
                 }
             }
@@ -536,7 +540,8 @@ public class DAEParser implements SceneParser {
     }
 
     private FastHashMap<String, Geometry> loadGeometry(String geometryId, Document doc) {
-        UI.printInfo(Module.GEOM, "Reading mesh: %s ...", geometryId);
+        String url = doc.getDocumentURI()+"#"+geometryId;
+        UI.printInfo(Module.GEOM, "Reading mesh: %s ...", url);
         try {
             NodeList trianglesList = (NodeList) xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/triangles", doc, XPathConstants.NODESET);
             int trianglesNum = trianglesList.getLength();
@@ -621,7 +626,7 @@ public class DAEParser implements SceneParser {
                     }
                 }
 
-                String gid = geometryId+"."+ Integer.toString(i);
+                String gid = url + "." + Integer.toString(i);
                 api.parameter("triangles", trianglesOut);
                 api.parameter("points", "point", "vertex", vertices);
                 if (normals != null) {
@@ -648,7 +653,7 @@ public class DAEParser implements SceneParser {
         }
     }
 
-    private void loadShader(String materialId, Document doc) {
+    private void loadShader(String materialId, Document doc, String url) {
         try {
             String effectId = xpath.evaluate(getMaterialQuery(materialId)+"/instance_effect/@url", doc).substring(1);
             Node technique = (Node) xpath.evaluate(getEffectQuery(effectId)+"/profile_COMMON/technique", doc, XPathConstants.NODE);
@@ -696,17 +701,17 @@ public class DAEParser implements SceneParser {
                             if (texture != null) {
                                 // TODO: textured shiny phong
                                 api.parameter("texture", texture);
-                                api.shader(materialId, "textured_phong");
+                                api.shader(url, "textured_phong");
                             } else {
                                 api.parameter("shiny", rf);
-                                api.shader(materialId, "shiny_phong");
+                                api.shader(url, "shiny_phong");
                             }
                         } else {
                             if (texture != null) {
                                 api.parameter("texture", texture);
-                                api.shader(materialId, "textured_phong");
+                                api.shader(url, "textured_phong");
                             } else {
-                                api.shader(materialId, "phong");
+                                api.shader(url, "phong");
                             }
                         }
 
@@ -717,12 +722,12 @@ public class DAEParser implements SceneParser {
                             // try to get color
                             float[] df = (float[]) diffuseObj;
                             api.parameter("diffuse", null, new Color(df[0],df[1],df[2]).getRGB());
-                            api.shader(materialId, "diffuse");
+                            api.shader(url, "diffuse");
                         } catch (Exception e) {
                             // handle texture
                             Element df = (Element) diffuseObj;
                             api.parameter("texture", getTexture(effectId, df));
-                            api.shader(materialId, "textured_diffuse");
+                            api.shader(url, "textured_diffuse");
                         }
                     }
                 }
