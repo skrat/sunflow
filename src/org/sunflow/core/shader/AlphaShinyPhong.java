@@ -1,20 +1,19 @@
 package org.sunflow.core.shader;
 
 import org.sunflow.SunflowAPI;
-import org.sunflow.core.AlphaShader;
 import org.sunflow.core.ParameterList;
 import org.sunflow.core.ShadingState;
 import org.sunflow.core.TextureCache;
-import org.sunflow.core.shader.DiffuseShader;
+import org.sunflow.core.shader.ShinyPhongShader;
 import org.sunflow.image.Bitmap;
 import org.sunflow.image.Color;
 import org.sunflow.math.MathUtils;
 
-public class AlphaDiffuseShader extends DiffuseShader implements AlphaShader {
+public class AlphaShinyPhong extends ShinyPhongShader {
 
     private Bitmap alpha;
 
-    public AlphaDiffuseShader() {
+    public AlphaShinyPhong() {
         alpha = null;
     }
 
@@ -56,4 +55,3 @@ public class AlphaDiffuseShader extends DiffuseShader implements AlphaShader {
         return alpha.readAlpha(ix, iy);
     }
 }
-

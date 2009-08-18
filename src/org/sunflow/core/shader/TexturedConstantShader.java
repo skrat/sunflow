@@ -10,6 +10,7 @@ import org.sunflow.image.Color;
 import org.sunflow.math.MathUtils;
 
 public class TexturedConstantShader extends ConstantShader {
+
     private Texture tex;
 
     public TexturedConstantShader() {

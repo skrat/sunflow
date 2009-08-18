@@ -793,8 +793,10 @@ public class DAEParser implements SceneParser {
                     api.parameter("texture", texture);
                     if (texture.endsWith(".png")) {
                         api.parameter("alpha_texture", texture);
+                        api.shader(url, "alpha_textured_shiny_phong");
+                    } else {
+                        api.shader(url, "textured_shiny_phong");
                     }
-                    api.shader(url, "textured_shiny_phong");
                 } else {
                     api.shader(url, "shiny_phong");
                 }
@@ -804,9 +806,9 @@ public class DAEParser implements SceneParser {
                     if (texture.endsWith(".png")) {
                         api.parameter("alpha_texture", texture);
                         api.shader(url, "alpha_textured_phong");
-                        return;
+                    } else {
+                        api.shader(url, "textured_phong");
                     }
-                    api.shader(url, "textured_phong");
                 } else {
                     api.shader(url, "phong");
                 }
