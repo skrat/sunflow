@@ -7,10 +7,10 @@ import org.sunflow.core.Texture;
 import org.sunflow.core.TextureCache;
 import org.sunflow.image.Color;
 
-public class TexturedPhongShader extends PhongShader {
+public class TexturedShinyPhongShader extends ShinyPhongShader {
     private Texture tex;
 
-    public TexturedPhongShader() {
+    public TexturedShinyPhongShader() {
         tex = null;
     }
 

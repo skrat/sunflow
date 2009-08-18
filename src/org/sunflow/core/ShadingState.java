@@ -90,6 +90,11 @@ public final class ShadingState implements Iterable<LightSample> {
         return s;
     }
 
+    static ShadingState createShadowState(ShadingState previous, Ray r) {
+        ShadingState s = new ShadingState(previous, previous.istate, r, 0, 2);
+        return s;
+    }
+
     static ShadingState createFinalGatherState(ShadingState state, Ray r, int i) {
         ShadingState finalGatherState = new ShadingState(state, state.istate, r, i, 2);
         finalGatherState.diffuseDepth++;
@@ -691,7 +696,13 @@ public final class ShadingState implements Iterable<LightSample> {
      * @return opacity along the shadow ray
      */
     public final Color traceShadow(Ray r) {
-        return server.getScene().traceShadow(r, istate);
+        return server.traceShadow(r, this);
+    }
+
+    public final Color traceTransparentShadow(float oldMaxT) { 
+        Ray tr = new Ray(r.ox, r.oy, r.oz, r.dx, r.dy, r.dz); 
+        tr.setMinMax(r.getMax(), oldMaxT); 
+        return traceShadow(tr); 
     }
 
     /**

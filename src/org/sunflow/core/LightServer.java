@@ -1,6 +1,8 @@
 package org.sunflow.core;
 
 import org.sunflow.PluginRegistry;
+import org.sunflow.core.Shader;
+import org.sunflow.core.AlphaShader;
 import org.sunflow.image.Color;
 import org.sunflow.math.Point3;
 import org.sunflow.math.QMC;
@@ -201,6 +203,30 @@ class LightServer {
         // scatter photon
         if (shader != null)
             shader.scatterPhoton(state, power);
+    }
+
+    Color traceShadow(Ray r, ShadingState previous) { 
+        float maxDist = r.getMax(); 
+        scene.traceShadow(r, previous.getIntersectionState()); 
+        if (previous.getIntersectionState().hit()) { 
+            ShadingState sstate = ShadingState.createShadowState(previous, r); 
+            sstate.getInstance().prepareShadingState(sstate); 
+            Shader shader = getShader(sstate); 
+            if (shader == null) 
+                return Color.WHITE;
+
+            try {
+                AlphaShader sa = (AlphaShader) shader;
+                Color o = sa.getOpacity(sstate); 
+                if (o.getMax() < 1) 
+                    return o.copy().madd(Color.sub(Color.WHITE, o), sstate.traceTransparentShadow(maxDist)); 
+                else 
+                    return o; 
+            } catch(Exception e) {
+                return Color.WHITE; 
+            }
+        } else 
+            return Color.BLACK; 
     }
 
     void traceDiffusePhoton(ShadingState previous, Ray r, Color power) {

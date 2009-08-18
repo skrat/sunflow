@@ -214,4 +214,15 @@ public final class Ray {
     public final void setMax(float t) {
         tMax = t;
     }
+
+    /**
+     * Updates the maximum and minimum to the specified distance.
+     * 
+     * @param min new minimum distance
+     * @param max new maximum distance
+     */
+    public final void setMinMax(float min, float max) {
+        tMin = min;
+        tMax = max;
+    }
 }

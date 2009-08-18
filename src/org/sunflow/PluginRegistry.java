@@ -79,6 +79,9 @@ import org.sunflow.core.renderer.BucketRenderer;
 import org.sunflow.core.renderer.MultipassRenderer;
 import org.sunflow.core.renderer.ProgressiveRenderer;
 import org.sunflow.core.renderer.SimpleRenderer;
+import org.sunflow.core.shader.AlphaDiffuseShader;
+import org.sunflow.core.shader.AlphaTexturedDiffuse;
+import org.sunflow.core.shader.AlphaTexturedPhong;
 import org.sunflow.core.shader.AmbientOcclusionShader;
 import org.sunflow.core.shader.AnisotropicWardShader;
 import org.sunflow.core.shader.ConstantShader;
@@ -94,9 +97,11 @@ import org.sunflow.core.shader.ShinyDiffuseShader;
 import org.sunflow.core.shader.ShinyPhongShader;
 import org.sunflow.core.shader.SimpleShader;
 import org.sunflow.core.shader.TexturedAmbientOcclusionShader;
+import org.sunflow.core.shader.TexturedConstantShader;
 import org.sunflow.core.shader.TexturedDiffuseShader;
 import org.sunflow.core.shader.TexturedPhongShader;
 import org.sunflow.core.shader.TexturedShinyDiffuseShader;
+import org.sunflow.core.shader.TexturedShinyPhongShader;
 import org.sunflow.core.shader.TexturedWardShader;
 import org.sunflow.core.shader.UVShader;
 import org.sunflow.core.shader.UberShader;
@@ -193,11 +198,18 @@ public final class PluginRegistry {
         shaderPlugins.registerPlugin("ward", AnisotropicWardShader.class);
         shaderPlugins.registerPlugin("wireframe", WireframeShader.class);
 
+        // non-opaque shaders
+        shaderPlugins.registerPlugin("alpha_diffuse", AlphaDiffuseShader.class);
+        shaderPlugins.registerPlugin("alpha_textured_diffuse", AlphaTexturedDiffuse.class);
+        shaderPlugins.registerPlugin("alpha_textured_phong", AlphaTexturedPhong.class);
+
         // textured shaders
         shaderPlugins.registerPlugin("textured_ambient_occlusion", TexturedAmbientOcclusionShader.class);
+        shaderPlugins.registerPlugin("textured_constant", TexturedConstantShader.class);
         shaderPlugins.registerPlugin("textured_diffuse", TexturedDiffuseShader.class);
         shaderPlugins.registerPlugin("textured_phong", TexturedPhongShader.class);
         shaderPlugins.registerPlugin("textured_shiny_diffuse", TexturedShinyDiffuseShader.class);
+        shaderPlugins.registerPlugin("textured_shiny_phong", TexturedShinyPhongShader.class);
         shaderPlugins.registerPlugin("textured_ward", TexturedWardShader.class);
 
         // preview shaders
