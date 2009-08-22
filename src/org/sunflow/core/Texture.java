@@ -106,6 +106,35 @@ public class Texture {
         return c;
     }
 
+    public float getAlpha(float x, float y) {
+        Bitmap bitmap = getBitmap();
+        x = MathUtils.frac(x);
+        y = MathUtils.frac(y);
+        float dx = x * (bitmap.getWidth() - 1);
+        float dy = y * (bitmap.getHeight() - 1);
+        int ix0 = (int) dx;
+        int iy0 = (int) dy;
+        int ix1 = (ix0 + 1) % bitmap.getWidth();
+        int iy1 = (iy0 + 1) % bitmap.getHeight();
+        float u = dx - ix0;
+        float v = dy - iy0;
+        u = u * u * (3.0f - (2.0f * u));
+        v = v * v * (3.0f - (2.0f * v));
+        float k00 = (1.0f - u) * (1.0f - v);
+        float a00 = bitmap.readAlpha(ix0, iy0);
+        float k01 = (1.0f - u) * v;
+        float a01 = bitmap.readAlpha(ix0, iy1);
+        float k10 = u * (1.0f - v);
+        float a10 = bitmap.readAlpha(ix1, iy0);
+        float k11 = u * v;
+        float a11 = bitmap.readAlpha(ix1, iy1);
+        float a = k00 * a00;
+        a += k01 * a01;
+        a += k10 * a10;
+        a += k11 * a11;
+        return a;
+    }
+
     public Vector3 getNormal(float x, float y, OrthoNormalBasis basis) {
         float[] rgb = getPixel(x, y).getRGB();
         return basis.transform(new Vector3(2 * rgb[0] - 1, 2 * rgb[1] - 1, 2 * rgb[2] - 1)).normalize();

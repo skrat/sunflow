@@ -3,17 +3,15 @@ package org.sunflow.core.shader;
 import org.sunflow.SunflowAPI;
 import org.sunflow.core.AlphaShader;
 import org.sunflow.core.ParameterList;
-import org.sunflow.core.Ray;
 import org.sunflow.core.ShadingState;
+import org.sunflow.core.Texture;
 import org.sunflow.core.TextureCache;
 import org.sunflow.core.shader.TexturedPhongShader;
-import org.sunflow.image.Bitmap;
 import org.sunflow.image.Color;
-import org.sunflow.math.MathUtils;
 
 public class AlphaTexturedPhong extends TexturedPhongShader implements AlphaShader {
 
-    private Bitmap alpha;
+    private Texture alpha;
 
     public AlphaTexturedPhong() {
         alpha = null;
@@ -22,7 +20,7 @@ public class AlphaTexturedPhong extends TexturedPhongShader implements AlphaShad
     public boolean update(ParameterList pl, SunflowAPI api) {
         String alphaFilename = pl.getString("alpha_texture", null);
         if (alphaFilename != null) {
-            alpha = TextureCache.getTexture(api.resolveTextureFilename(alphaFilename), false).getBitmap();
+            alpha = TextureCache.getTexture(api.resolveTextureFilename(alphaFilename), false);
         }
         return super.update(pl,api);
     }
@@ -42,18 +40,10 @@ public class AlphaTexturedPhong extends TexturedPhongShader implements AlphaShad
     }
 
     public Color getOpacity(ShadingState state) {
-        float a = getAlpha(state);
-        return new Color(a);
+        return new Color( getAlpha(state) );
     }
 
     private float getAlpha(ShadingState state) {
-        float x = MathUtils.frac(state.getUV().x);
-        float y = MathUtils.frac(state.getUV().y);
-        float dx = x * (alpha.getWidth() - 1);
-        float dy = y * (alpha.getHeight() - 1);
-        int ix = (int) dx;
-        int iy = (int) dy;
-
-        return alpha.readAlpha(ix, iy);
+        return alpha.getAlpha(state.getUV().x, state.getUV().y);
     }
 }

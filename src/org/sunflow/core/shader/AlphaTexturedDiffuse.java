@@ -4,14 +4,14 @@ import org.sunflow.SunflowAPI;
 import org.sunflow.core.AlphaShader;
 import org.sunflow.core.ParameterList;
 import org.sunflow.core.ShadingState;
+import org.sunflow.core.Texture;
 import org.sunflow.core.TextureCache;
 import org.sunflow.core.shader.TexturedDiffuseShader;
-import org.sunflow.image.Bitmap;
 import org.sunflow.image.Color;
-import org.sunflow.math.MathUtils;
 
 public class AlphaTexturedDiffuse extends TexturedDiffuseShader implements AlphaShader {
-    private Bitmap alpha;
+
+    private Texture alpha;
 
     public AlphaTexturedDiffuse() {
         alpha = null;
@@ -20,14 +20,14 @@ public class AlphaTexturedDiffuse extends TexturedDiffuseShader implements Alpha
     public boolean update(ParameterList pl, SunflowAPI api) {
         String alphaFilename = pl.getString("alpha_texture", null);
         if (alphaFilename != null) {
-            alpha = TextureCache.getTexture(api.resolveTextureFilename(alphaFilename), false).getBitmap();
+            alpha = TextureCache.getTexture(api.resolveTextureFilename(alphaFilename), false);
         }
         return true && super.update(pl, api);
     }
 
     public Color getRadiance(ShadingState state) {
         Color result = super.getRadiance(state);
-        if (alpha != null) {
+        if (false) {
             float a = getAlpha(state);
             if (a < 1.0f) {
                 return Color.blend(state.traceTransparency(),result,a);
@@ -40,19 +40,11 @@ public class AlphaTexturedDiffuse extends TexturedDiffuseShader implements Alpha
     }
 
     public Color getOpacity(ShadingState state) {
-        float a = getAlpha(state);
-        return new Color(a);
+        return new Color( getAlpha(state) );
     }
 
     private float getAlpha(ShadingState state) {
-        float x = MathUtils.frac(state.getUV().x);
-        float y = MathUtils.frac(state.getUV().y);
-        float dx = x * (alpha.getWidth() - 1);
-        float dy = y * (alpha.getHeight() - 1);
-        int ix = (int) dx;
-        int iy = (int) dy;
-
-        return alpha.readAlpha(ix, iy);
+        return alpha.getAlpha(state.getUV().x, state.getUV().y);
     }
 }
 

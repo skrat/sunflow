@@ -750,6 +750,8 @@ public class DAEParser implements SceneParser {
         void create(FastHashMap<String, Object> shaderParams, Element extraTechnique) {
             Object diffuseObj = shaderParams.get("diffuse");
             String texture = null;
+            Color extraColor = null;
+
             try {
                 // to get color
                 float[] df = (float[]) diffuseObj;
@@ -758,9 +760,10 @@ public class DAEParser implements SceneParser {
                 // or handle texture
                 try {
                     // to get <extra> color
-                    Color c = parseColor(extraTechnique.getElementsByTagName("diffuse").item(0).getTextContent());
-                    api.parameter("diffuse", null, c.getRGB());
+                    extraColor = parseColor(extraTechnique.getElementsByTagName("diffuse").item(0).getTextContent());
+                    api.parameter("diffuse", null, extraColor.getRGB());
                 } catch(Exception e2) { }
+
                 Element df = (Element) diffuseObj;
                 texture = getTexture(effectId, df, doc);
             }
@@ -788,10 +791,11 @@ public class DAEParser implements SceneParser {
             } catch (Exception e) { }
 
             if (rf > 0.0f) {
+                // shiny variant
                 api.parameter("shiny", rf);
                 if (texture != null) {
                     api.parameter("texture", texture);
-                    if (texture.endsWith(".png")) {
+                    if (texture.endsWith(".png") && extraColor == null) {
                         api.parameter("alpha_texture", texture);
                         api.shader(url, "alpha_textured_shiny_phong");
                     } else {
@@ -801,9 +805,10 @@ public class DAEParser implements SceneParser {
                     api.shader(url, "shiny_phong");
                 }
             } else {
+                // no reflection (almost)
                 if (texture != null) {
                     api.parameter("texture", texture);
-                    if (texture.endsWith(".png")) {
+                    if (texture.endsWith(".png") && extraColor == null) {
                         api.parameter("alpha_texture", texture);
                         api.shader(url, "alpha_textured_phong");
                     } else {
@@ -824,6 +829,8 @@ public class DAEParser implements SceneParser {
 
         void create(FastHashMap<String, Object> shaderParams, Element extraTechnique) {
             Object diffuseObj = shaderParams.get("diffuse");
+            Color extraColor = null;
+
             try {
                 // try to get color
                 float[] df = (float[]) diffuseObj;
@@ -831,10 +838,16 @@ public class DAEParser implements SceneParser {
                 api.shader(url, "diffuse");
             } catch (Exception e) {
                 // handle texture
+                try {
+                    // to get <extra> color
+                    extraColor = parseColor(extraTechnique.getElementsByTagName("diffuse").item(0).getTextContent());
+                    api.parameter("diffuse", null, extraColor.getRGB());
+                } catch(Exception e2) { }
+
                 Element df = (Element) diffuseObj;
                 String texture = getTexture(effectId, df, doc);
                 api.parameter("texture", texture);
-                if (texture.endsWith(".png")) {
+                if (texture.endsWith(".png") && extraColor == null) {
                     api.parameter("alpha_texture", texture);
                     api.shader(url, "alpha_textured_diffuse");
                 } else {
@@ -873,7 +886,8 @@ public class DAEParser implements SceneParser {
     private void instantiateLight(Element lightInstance, Matrix4 transformation, String lightId) {
         UI.printInfo(Module.LIGHT, "Reading light: %s ...", lightId);
         try {
-            Element light = (Element) xpath.evaluate(getLightQuery(lightId)+"/technique_common", dae, XPathConstants.NODE);
+            Document doc = getDocument(lightInstance);
+            Element light = (Element) xpath.evaluate(getLightQuery(lightId)+"/technique_common", doc, XPathConstants.NODE);
             for (Node childNode = light.getFirstChild(); childNode != null;) {
                 Node nextChild = childNode.getNextSibling();
 
@@ -891,6 +905,7 @@ public class DAEParser implements SceneParser {
 
                         api.light(lightId+"."+Integer.toString(ii), "directional");
 
+                    // POINT LIGHT
                     } else if (tagname.equals("point")) {
                         FastHashMap<String, Object> params = getParams(child);
                         Color power = null;
@@ -908,6 +923,45 @@ public class DAEParser implements SceneParser {
                         api.parameter("power", null, power.getRGB());
                         api.light(lightId+"."+Integer.toString(ii), "point");
 
+                    // IMAGE BASED LIGHT
+                    } else if (tagname.equals("ambient")) {
+                        try {
+                            NodeList techniques = ((Element) child.getParentNode().getParentNode()).getElementsByTagName("technique");
+                            int l = techniques.getLength();
+                            for (int i=0; i<l; i++) {
+                                Element t = (Element) techniques.item(i);
+                                if (t.getAttribute("profile").equals("sunflow")) {
+                                    FastHashMap<String, Object> params = getParams((Element) t.getElementsByTagName("ibl").item(0));
+
+                                    String imgid = t.getElementsByTagName("init_from").item(0).getTextContent();
+                                    String path = xpath.evaluate(getImageQuery(imgid.trim()), doc).trim();
+                                    api.parameter("texture", api.resolveIncludeFilename(path));
+
+                                    float[] center = (float[]) params.get("center");
+                                    api.parameter("center", new Vector3(center[0],center[1],center[2]));
+
+                                    try {
+                                        float[] up = (float[]) params.get("up");
+                                        api.parameter("up", new Vector3(up[0],up[1],up[2]));
+                                    } catch(Exception e) {
+                                        api.parameter("up", new Vector3(0f,0f,1f));
+                                    }
+
+                                    try {
+                                        String fixed = ((Element) params.get("fixed")).getTextContent().trim();
+                                        api.parameter("fixed", Boolean.valueOf(fixed).booleanValue());
+                                    } catch(Exception e) { }
+
+                                    try {
+                                        int samples = (int) ((float[]) params.get("samples"))[0];
+                                        api.parameter("samples", samples);
+                                    } catch(Exception e) { }
+
+                                    api.light(lightId+"."+Integer.toString(ii), "ibl");
+                                    break;
+                                }
+                            }
+                        } catch(Exception e) { }
                     }
                     ii++;
                     lightCache.put(lightId, ii);

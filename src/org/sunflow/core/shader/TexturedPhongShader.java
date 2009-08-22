@@ -8,6 +8,7 @@ import org.sunflow.core.TextureCache;
 import org.sunflow.image.Color;
 
 public class TexturedPhongShader extends PhongShader {
+
     private Texture tex;
 
     public TexturedPhongShader() {
@@ -24,6 +25,13 @@ public class TexturedPhongShader extends PhongShader {
 
     @Override
     public Color getDiffuse(ShadingState state) {
-        return tex.getPixel(state.getUV().x, state.getUV().y).mul(super.getDiffuse(state));
+        float a = tex.getAlpha(state.getUV().x, state.getUV().y);
+        if (a < 1f) {
+          return Color.blend(
+              super.getDiffuse(state),
+              tex.getPixel(state.getUV().x, state.getUV().y), a );
+        } else {
+          return tex.getPixel(state.getUV().x, state.getUV().y);
+        }
     }
 }
