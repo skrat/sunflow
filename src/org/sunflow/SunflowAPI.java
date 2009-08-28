@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.Hashtable;
 import java.util.Locale;
 
 import org.codehaus.janino.ClassBodyEvaluator;
@@ -90,6 +91,10 @@ public class SunflowAPI implements SunflowAPIInterface {
         parameterList = new ParameterList();
         renderObjects = new RenderObjectMap();
         currentFrame = 1;
+    }
+
+    public final Hashtable<String, RenderObjectMap.RenderObjectType> inspect() {
+        return renderObjects.inspect();
     }
 
     public final void plugin(String type, String name, String code) {

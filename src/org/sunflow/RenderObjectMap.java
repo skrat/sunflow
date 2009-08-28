@@ -1,6 +1,7 @@
 package org.sunflow;
 
 import java.util.ArrayList;
+import java.util.Hashtable;
 import java.util.Locale;
 
 import org.sunflow.core.Camera;
@@ -24,7 +25,7 @@ final class RenderObjectMap {
     private boolean rebuildInstanceList;
     private boolean rebuildLightList;
 
-    private enum RenderObjectType {
+    enum RenderObjectType {
         UNKNOWN, SHADER, MODIFIER, GEOMETRY, INSTANCE, LIGHT, CAMERA, OPTIONS
     }
 
@@ -247,6 +248,14 @@ final class RenderObjectMap {
             return null;
         RenderObjectHandle handle = renderObjects.get(name);
         return (handle == null) ? null : handle.getLight();
+    }
+
+    final Hashtable<String, RenderObjectType> inspect() {
+      Hashtable<String, RenderObjectType> r = new Hashtable<String, RenderObjectType>();
+      for (FastHashMap.Entry<String, RenderObjectHandle> e : renderObjects) {
+          r.put( e.getKey(), e.getValue().type );
+      }
+      return r;
     }
 
     private static final class RenderObjectHandle {

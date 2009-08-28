@@ -527,9 +527,9 @@ public class DAEParser implements SceneParser {
 
         try {
             FastHashMap<String, Geometry> geoms = geometryCache.get(geometryId);
-
             FastHashMap<String, String> materials = new FastHashMap<String, String>();
             NodeList matInstances = instance.getElementsByTagName("instance_material");
+
             if ( matInstances.getLength() > 0 ) {
                 for (int i=0; i < matInstances.getLength(); i++) {
                     Element imat = (Element) matInstances.item(i);
@@ -582,107 +582,123 @@ public class DAEParser implements SceneParser {
 
             // handle multiple <triangles> elements
             for (int i=0; i<trianglesNum; i++) {
+
                 Element trisEl  = (Element) trianglesList.item(i);
-                String trisMat  = trisEl.getAttribute("material");
-                NodeList inputs = (NodeList) trisEl.getElementsByTagName("input");
-                Integer numInputs = inputs.getLength();
-                Integer vOffset = null,
-                        nOffset = null,
-                        tOffset = null;
-
-                int normalsType  = FACE;
-                float[] vertices = null;
-                float[] normals  = null;
-                float[] texcoord = null;
-                for (int j=0; j<inputs.getLength(); j++) {
-                    Element in = (Element) inputs.item(j);
-                    String semantic = in.getAttribute("semantic");
-                    String sourceId = in.getAttribute("source").substring(1);
-                    if ( semantic.equals("VERTEX") ) {
-                        String vertexDataId = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/vertices/input[@semantic='POSITION']/@source", doc).substring(1);
-                        String vertexData = xpath.evaluate(getGeometrySourceQuery(geometryId, vertexDataId), doc);
-                        vOffset = Integer.parseInt(in.getAttribute("offset"));
-                        vertices = parseFloats(vertexData);
-                    } else if ( semantic.equals("NORMAL") ) {
-                        String normalData = xpath.evaluate(getGeometrySourceQuery(geometryId, sourceId), doc);
-                        nOffset = Integer.parseInt(in.getAttribute("offset"));
-                        normals = parseFloats(normalData);
-                    } else if ( semantic.equals("TEXCOORD") ) {
-                        String texcoordData = xpath.evaluate(getGeometrySourceQuery(geometryId, sourceId), doc);
-                        tOffset = Integer.parseInt(in.getAttribute("offset"));
-                        texcoord = parseFloats(texcoordData);
-                    }
-                }
-
-                String pointsData = trisEl.getElementsByTagName("p").item(0).getTextContent();
-                String[] pointsStrings = pointsData.trim().split("\\s+");
-                int num = pointsStrings.length/numInputs;
-                int[] trianglesOut = new int[num];
-                for (int j=0; j < num; j++) {
-                    trianglesOut[j] = Integer.parseInt(pointsStrings[j*numInputs+vOffset]);
-                }
-
-                float[] normalsFloats = null;
-                if (normals != null) {
-                    normalsFloats = new float[(pointsStrings.length/numInputs)*3];
-                    int nNum = normalsFloats.length/3;
-
-                    for (int j=0; j < nNum; j++) {
-                        int nix = Integer.parseInt(pointsStrings[j*numInputs+nOffset]);  // normal index
-                        try {
-                            normalsFloats[j*3] = (normalsFloats[j*3] + normals[nix*3])/2.0f;
-                        } catch (NullPointerException e){
-                            normalsFloats[j*3] = normals[nix*3];
-                        }
-                        try {
-                            normalsFloats[j*3+1] = (normalsFloats[j*3+1] + normals[nix*3+1])/2.0f;
-                        } catch (NullPointerException e){
-                            normalsFloats[j*3+1] = normals[nix*3+1];
-                        }
-                        try {
-                            normalsFloats[j*3+2] = (normalsFloats[j*3+2] + normals[nix*3+2])/2.0f;
-                        } catch (NullPointerException e){
-                            normalsFloats[j*3+2] = normals[nix*3+2];
-                        }
-                    }
-                } else {
-                    try {
-                        String normalDataId = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/vertices/input[@semantic='NORMAL']/@source", doc).substring(1);
-                        normals = parseFloats(xpath.evaluate(getGeometrySourceQuery(geometryId, normalDataId), doc));
-                    } catch (Exception e) { }
-                }
-
-                float[] texcoordFloats = null;
-                if (texcoord != null) {
-                    texcoordFloats = new float[(vertices.length/3)*2];
-
-                    for (int j=0; j < num; j++) {
-                        int vix = Integer.parseInt(pointsStrings[j*numInputs]);    // vertex index
-                        int tix = Integer.parseInt(pointsStrings[j*numInputs+tOffset]);  // texcoord index
-                        texcoordFloats[vix*2] = texcoord[tix*2];
-                        texcoordFloats[vix*2+1] = texcoord[tix*2+1];
-                    }
-                }
+                String trisMat  = loadTriangles(geometryId, doc, trisEl);
 
                 String gid = url + "." + Integer.toString(i);
-                api.parameter("triangles", trianglesOut);
-                api.parameter("points", "point", "vertex", vertices);
-                if (normals != null) {
-                    if (normalsType == FACE) {
-                        api.parameter("normals", "vector", "facevarying", normalsFloats);
-                    } else if (normalsType == VERTEX) {
-                        api.parameter("normals", "vector", "vertex", normals);
-                    }
-                }
-                if (texcoord != null && texcoordFloats != null) {
-                    api.parameter("uvs", "texcoord", "vertex", texcoordFloats);
-                }
                 api.geometry(gid, "triangle_mesh");
+
                 geoms.put(gid, new Geometry(trisMat, 0));
 
             }
 
             return geoms;
+
+        } catch(Exception e) {
+            e.printStackTrace();
+            UI.printError(Module.GEOM, "Error reading mesh: %s ...", geometryId);
+            return null;
+        }
+    }
+
+    private String loadTriangles(String geometryId, Document doc, Element trisEl) {
+        try {
+            String trisMat  = trisEl.getAttribute("material");
+            NodeList inputs = (NodeList) trisEl.getElementsByTagName("input");
+            Integer numInputs = inputs.getLength();
+            Integer vOffset = null,
+                    nOffset = null,
+                    tOffset = null;
+
+            int normalsType  = FACE;
+            float[] vertices = null;
+            float[] normals  = null;
+            float[] texcoord = null;
+            for (int j=0; j<inputs.getLength(); j++) {
+                Element in = (Element) inputs.item(j);
+                String semantic = in.getAttribute("semantic");
+                String sourceId = in.getAttribute("source").substring(1);
+                if ( semantic.equals("VERTEX") ) {
+                    String vertexDataId = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/vertices/input[@semantic='POSITION']/@source", doc).substring(1);
+                    String vertexData = xpath.evaluate(getGeometrySourceQuery(geometryId, vertexDataId), doc);
+                    vOffset = Integer.parseInt(in.getAttribute("offset"));
+                    vertices = parseFloats(vertexData);
+                } else if ( semantic.equals("NORMAL") ) {
+                    String normalData = xpath.evaluate(getGeometrySourceQuery(geometryId, sourceId), doc);
+                    nOffset = Integer.parseInt(in.getAttribute("offset"));
+                    normals = parseFloats(normalData);
+                } else if ( semantic.equals("TEXCOORD") ) {
+                    String texcoordData = xpath.evaluate(getGeometrySourceQuery(geometryId, sourceId), doc);
+                    tOffset = Integer.parseInt(in.getAttribute("offset"));
+                    texcoord = parseFloats(texcoordData);
+                }
+            }
+
+            String pointsData = trisEl.getElementsByTagName("p").item(0).getTextContent();
+            String[] pointsStrings = pointsData.trim().split("\\s+");
+            int num = pointsStrings.length/numInputs;
+            int[] trianglesOut = new int[num];
+            for (int j=0; j < num; j++) {
+                trianglesOut[j] = Integer.parseInt(pointsStrings[j*numInputs+vOffset]);
+            }
+
+            float[] normalsFloats = null;
+            if (normals != null) {
+                normalsFloats = new float[(pointsStrings.length/numInputs)*3];
+                int nNum = normalsFloats.length/3;
+
+                for (int j=0; j < nNum; j++) {
+                    int nix = Integer.parseInt(pointsStrings[j*numInputs+nOffset]);  // normal index
+                    try {
+                        normalsFloats[j*3] = (normalsFloats[j*3] + normals[nix*3])/2.0f;
+                    } catch (NullPointerException e){
+                        normalsFloats[j*3] = normals[nix*3];
+                    }
+                    try {
+                        normalsFloats[j*3+1] = (normalsFloats[j*3+1] + normals[nix*3+1])/2.0f;
+                    } catch (NullPointerException e){
+                        normalsFloats[j*3+1] = normals[nix*3+1];
+                    }
+                    try {
+                        normalsFloats[j*3+2] = (normalsFloats[j*3+2] + normals[nix*3+2])/2.0f;
+                    } catch (NullPointerException e){
+                        normalsFloats[j*3+2] = normals[nix*3+2];
+                    }
+                }
+            } else {
+                try {
+                    String normalDataId = xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/vertices/input[@semantic='NORMAL']/@source", doc).substring(1);
+                    normals = parseFloats(xpath.evaluate(getGeometrySourceQuery(geometryId, normalDataId), doc));
+                } catch (Exception e) { }
+            }
+
+            float[] texcoordFloats = null;
+            if (texcoord != null) {
+                texcoordFloats = new float[(vertices.length/3)*2];
+
+                for (int j=0; j < num; j++) {
+                    int vix = Integer.parseInt(pointsStrings[j*numInputs]);    // vertex index
+                    int tix = Integer.parseInt(pointsStrings[j*numInputs+tOffset]);  // texcoord index
+                    texcoordFloats[vix*2] = texcoord[tix*2];
+                    texcoordFloats[vix*2+1] = texcoord[tix*2+1];
+                }
+            }
+
+            api.parameter("triangles", trianglesOut);
+            api.parameter("points", "point", "vertex", vertices);
+            if (normals != null) {
+                if (normalsType == FACE) {
+                    api.parameter("normals", "vector", "facevarying", normalsFloats);
+                } else if (normalsType == VERTEX) {
+                    api.parameter("normals", "vector", "vertex", normals);
+                }
+            }
+            if (texcoord != null && texcoordFloats != null) {
+                api.parameter("uvs", "texcoord", "vertex", texcoordFloats);
+            }
+
+            return trisMat;
 
         } catch(Exception e) {
             e.printStackTrace();
