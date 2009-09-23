@@ -1,7 +1,6 @@
 package org.sunflow.core.tesselatable;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -19,8 +18,6 @@ import org.sunflow.math.BoundingBox;
 import org.sunflow.math.Matrix4;
 import org.sunflow.system.UI;
 import org.sunflow.system.UI.Module;
-import org.sunflow.util.FloatArray;
-import org.sunflow.util.IntArray;
 import org.sunflow.util.ColladaDocument;
 import org.sunflow.io.Resources;
 

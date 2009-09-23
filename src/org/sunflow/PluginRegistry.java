@@ -80,6 +80,7 @@ import org.sunflow.core.renderer.MultipassRenderer;
 import org.sunflow.core.renderer.ProgressiveRenderer;
 import org.sunflow.core.renderer.SimpleRenderer;
 import org.sunflow.core.shader.AlphaDiffuseShader;
+import org.sunflow.core.shader.AlphaPhongShader;
 import org.sunflow.core.shader.AlphaShinyPhong;
 import org.sunflow.core.shader.AlphaTexturedDiffuse;
 import org.sunflow.core.shader.AlphaTexturedPhong;
@@ -105,6 +106,7 @@ import org.sunflow.core.shader.TexturedPhongShader;
 import org.sunflow.core.shader.TexturedShinyDiffuseShader;
 import org.sunflow.core.shader.TexturedShinyPhongShader;
 import org.sunflow.core.shader.TexturedWardShader;
+import org.sunflow.core.shader.TransparentShinyPhong;
 import org.sunflow.core.shader.UVShader;
 import org.sunflow.core.shader.UberShader;
 import org.sunflow.core.shader.ViewCausticsShader;
@@ -202,6 +204,7 @@ public final class PluginRegistry {
 
         // non-opaque shaders
         shaderPlugins.registerPlugin("alpha_diffuse", AlphaDiffuseShader.class);
+        shaderPlugins.registerPlugin("alpha_phong", AlphaPhongShader.class);
         shaderPlugins.registerPlugin("alpha_shiny_phong", AlphaShinyPhong.class);
         shaderPlugins.registerPlugin("alpha_textured_diffuse", AlphaTexturedDiffuse.class);
         shaderPlugins.registerPlugin("alpha_textured_phong", AlphaTexturedPhong.class);
@@ -215,6 +218,9 @@ public final class PluginRegistry {
         shaderPlugins.registerPlugin("textured_shiny_diffuse", TexturedShinyDiffuseShader.class);
         shaderPlugins.registerPlugin("textured_shiny_phong", TexturedShinyPhongShader.class);
         shaderPlugins.registerPlugin("textured_ward", TexturedWardShader.class);
+
+        // transparent shaders
+        shaderPlugins.registerPlugin("transparent_shiny_phong", TransparentShinyPhong.class);
 
         // preview shaders
         shaderPlugins.registerPlugin("quick_gray", QuickGrayShader.class);

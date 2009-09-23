@@ -23,6 +23,7 @@ import org.sunflow.core.Modifier;
 import org.sunflow.core.Options;
 import org.sunflow.core.ParameterList;
 import org.sunflow.core.PrimitiveList;
+import org.sunflow.core.RenderObject;
 import org.sunflow.core.Scene;
 import org.sunflow.core.SceneParser;
 import org.sunflow.core.Shader;
@@ -93,7 +94,7 @@ public class SunflowAPI implements SunflowAPIInterface {
         currentFrame = 1;
     }
 
-    public final Hashtable<String, RenderObjectMap.RenderObjectType> inspect() {
+    public final Hashtable<String,RenderObject> inspect() {
         return renderObjects.inspect();
     }
 

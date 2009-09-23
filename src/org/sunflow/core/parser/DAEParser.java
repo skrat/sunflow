@@ -28,8 +28,6 @@ import org.sunflow.math.Matrix4;
 import org.sunflow.math.Point3;
 import org.sunflow.math.Vector3;
 import org.sunflow.image.Color;
-import org.sunflow.util.FloatArray;
-import org.sunflow.util.IntArray;
 import org.sunflow.util.FastHashMap;
 
 public class DAEParser implements SceneParser {
@@ -405,7 +403,9 @@ public class DAEParser implements SceneParser {
             FastHashMap<String, Object> optics = getParams(opticsElement);
             Float xfov = null,
                   yfov = null,
-                   fov = null;
+                   fov = null,
+                 znear = null,
+                  zfar = null;
 
             try {
                 xfov = ((float[]) optics.get("xfov"))[0];
@@ -420,6 +420,13 @@ public class DAEParser implements SceneParser {
                                {  fov = fov/2.0f; }
             if (fov == 0.0f)   {  fov = 45.0f;    }  // default value
 
+            try {
+                znear = ((float[]) optics.get("znear"))[0];
+            } catch(Exception e) { }
+            try {
+                zfar = ((float[]) optics.get("zfar"))[0];
+            } catch(Exception e) { }
+
             // default value
             Float aspectRatio = 1.333f;
             try {
@@ -429,7 +436,25 @@ public class DAEParser implements SceneParser {
             api.parameter("transform", transform);
             api.parameter("fov", fov);
             api.parameter("aspect", aspectRatio);
-            api.camera(cameraId, "pinhole");
+
+            if (zfar != null || znear != null) {
+              float fdist = 0;
+              float lensr = 1;
+              if (zfar != null && znear != null) {
+                fdist = ( znear + zfar ) / 2f;
+                lensr = zfar - znear;
+              } else {
+                fdist = (zfar == null) ? znear : zfar;
+                lensr = 1;
+              }
+
+              api.parameter("focus.distance", fdist);
+              api.parameter("lens.radius", lensr);
+              api.camera(cameraId, "thinlens");
+            } else {
+              api.camera(cameraId, "pinhole");
+            }
+
             api.parameter("camera", cameraId);
             api.options(SunflowAPI.DEFAULT_OPTIONS);
 
@@ -456,7 +481,6 @@ public class DAEParser implements SceneParser {
     }
 
     private void parseNode(Element node) {
-        String nodeId = node.getAttribute("id");
         Matrix4 transformation = null;
         if ( transformCache.containsKey(node) ) {
             transformation = transformCache.get(node);
@@ -560,11 +584,11 @@ public class DAEParser implements SceneParser {
                 api.parameter("transform", transformation);
                 if ( material != null ) {
                     api.parameter("shaders", new String[]{material});
-                }
-                api.instance(gid + "." + ii.toString() + ".instance", gid);
+                    api.instance(gid + "." + ii.toString() + ".instance", gid);
 
-                // instance counter
-                geom.instancesCount = ii+1;
+                    // instance counter
+                    geom.instancesCount = ii+1;
+                }
             }
         } catch (Exception e) {
             UI.printError(Module.GEOM, "Error instantiating mesh: %s ...", geometryId);
@@ -577,7 +601,6 @@ public class DAEParser implements SceneParser {
         try {
             NodeList trianglesList = (NodeList) xpath.evaluate(getGeometryQuery(geometryId)+"/mesh/triangles", doc, XPathConstants.NODESET);
             int trianglesNum = trianglesList.getLength();
-            int[] triangles = null;
             FastHashMap<String, Geometry> geoms = new FastHashMap<String, Geometry>();
 
             // handle multiple <triangles> elements
@@ -711,10 +734,12 @@ public class DAEParser implements SceneParser {
         try {
             String effectId = xpath.evaluate(getMaterialQuery(materialId)+"/instance_effect/@url", doc).substring(1);
             Node technique = (Node) xpath.evaluate(getEffectQuery(effectId)+"/profile_COMMON/technique", doc, XPathConstants.NODE);
+
             Element extraTechnique = null;
             try {
-                extraTechnique = (Element) xpath.evaluate(getEffectQuery(effectId)+"/profile_COMMON/extra/technique[@sid='sunflow']", doc, XPathConstants.NODE);
+                extraTechnique = (Element) xpath.evaluate(getEffectQuery(effectId)+"/extra/technique[@profile='sunflow']", doc, XPathConstants.NODE);
             } catch(Exception e) { }
+
             for (Node childNode = technique.getFirstChild(); childNode != null;) {
                 Node nextChild = childNode.getNextSibling();
 
@@ -767,6 +792,7 @@ public class DAEParser implements SceneParser {
             Object diffuseObj = shaderParams.get("diffuse");
             String texture = null;
             Color extraColor = null;
+            float transparency = 0f;
 
             try {
                 // to get color
@@ -795,18 +821,23 @@ public class DAEParser implements SceneParser {
             } catch (Exception e) { }
 
             try {
+                transparency = ((float[]) shaderParams.get("transparency"))[0];
+                api.parameter("transparency", transparency);
+            } catch (Exception e) { }
+
+            try {
                 Integer samples = Integer.parseInt(extraTechnique.getElementsByTagName("samples").item(0).getTextContent());
                 api.parameter("samples", samples);
             } catch(Exception e) {
                 api.parameter("samples", 0);
             }
 
-            float rf = 0.0f;
+            float rf = 0f;
             try {
                 rf = ((float[]) shaderParams.get("reflectivity"))[0];
             } catch (Exception e) { }
 
-            if (rf > 0.0f) {
+            if (rf > 0f) {
                 // shiny variant
                 api.parameter("shiny", rf);
                 if (texture != null) {
@@ -818,7 +849,11 @@ public class DAEParser implements SceneParser {
                         api.shader(url, "textured_shiny_phong");
                     }
                 } else {
-                    api.shader(url, "shiny_phong");
+                    if (transparency > 0f) {
+                        api.shader(url, "transparent_shiny_phong");
+                    } else {
+                        api.shader(url, "shiny_phong");
+                    }
                 }
             } else {
                 // no reflection (almost)
@@ -831,7 +866,11 @@ public class DAEParser implements SceneParser {
                         api.shader(url, "textured_phong");
                     }
                 } else {
-                    api.shader(url, "phong");
+                    if (transparency > 0f) {
+                        api.shader(url, "alpha_phong");
+                    } else {
+                        api.shader(url, "phong");
+                    }
                 }
             }
         }
@@ -1226,10 +1265,6 @@ public class DAEParser implements SceneParser {
 
     private String getLightQuery(String lightId) {
         return String.format("/COLLADA/library_lights/light[@id='%s']", lightId);
-    }
-
-    private String getNodeQuery(String nodeId) {
-        return String.format("/COLLADA/library_nodes/node[@id='%s']", nodeId);
     }
 
     // ---

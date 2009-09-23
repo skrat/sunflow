@@ -1,6 +1,7 @@
 package org.sunflow.core.shader;
 
 import org.sunflow.SunflowAPI;
+import org.sunflow.core.AlphaShader;
 import org.sunflow.core.ParameterList;
 import org.sunflow.core.ShadingState;
 import org.sunflow.core.TextureCache;
@@ -9,7 +10,7 @@ import org.sunflow.image.Bitmap;
 import org.sunflow.image.Color;
 import org.sunflow.math.MathUtils;
 
-public class AlphaShinyPhong extends ShinyPhongShader {
+public class AlphaShinyPhong extends ShinyPhongShader implements AlphaShader {
 
     private Bitmap alpha;
 

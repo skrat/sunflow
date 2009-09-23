@@ -15,7 +15,9 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.Hashtable;
 import java.util.List;
+import java.util.Map.Entry;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -46,6 +48,7 @@ import org.sunflow.Benchmark;
 import org.sunflow.RealtimeBenchmark;
 import org.sunflow.SunflowAPI;
 import org.sunflow.core.Display;
+import org.sunflow.core.RenderObject;
 import org.sunflow.core.TextureCache;
 import org.sunflow.core.accel.KDTree;
 import org.sunflow.core.display.FileDisplay;
@@ -999,12 +1002,25 @@ public class SunflowGUI extends javax.swing.JFrame implements UserInterface {
                     }
                     t.end();
                     UI.printInfo(Module.GUI, "Build time: %s", t.toString());
-                    sceneTree = new JTree(api.inspect());
+                    sceneTree = new JTree(buildSceneTree(api.inspect()));
                     jScrollPane3.setViewportView(sceneTree);
                 }
                 setEnableInterface(true);
             }
         }.start();
+    }
+
+    private Hashtable buildSceneTree(Hashtable<String,RenderObject> map) {
+        Hashtable<String, RenderObject> result = new Hashtable<String, RenderObject>();
+        
+        for ( Entry<String,RenderObject> e: map.entrySet() ) {
+            String[] path = e.getKey().split("/");
+            String name = path[path.length-1];
+            RenderObject obj = e.getValue();
+            
+            result.put(name, obj);
+        }
+        return result;
     }
 
     private void clearConsole() {

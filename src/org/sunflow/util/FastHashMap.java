@@ -17,7 +17,7 @@ public class FastHashMap<K, V> implements Iterable<FastHashMap.Entry<K, V>> {
         private final K k;
         private V v;
 
-        private Entry(K k, V v) {
+        public Entry(K k, V v) {
             this.k = k;
             this.v = v;
         }

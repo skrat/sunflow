@@ -27,7 +27,7 @@ public class AlphaTexturedDiffuse extends TexturedDiffuseShader implements Alpha
 
     public Color getRadiance(ShadingState state) {
         Color result = super.getRadiance(state);
-        if (false) {
+        if (alpha != null) {
             float a = getAlpha(state);
             if (a < 1.0f) {
                 return Color.blend(state.traceTransparency(),result,a);

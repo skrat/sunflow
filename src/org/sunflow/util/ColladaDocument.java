@@ -3,8 +3,6 @@ package org.sunflow.util;
 import javax.xml.xpath.*;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import org.w3c.dom.NodeList;
-import org.w3c.dom.Node;
 
 import org.sunflow.system.UI;
 import org.sunflow.system.UI.Module;
@@ -12,8 +10,6 @@ import org.sunflow.util.FloatArray;
 import org.sunflow.util.IntArray;
 
 public class ColladaDocument {
-
-    private Document dae;
 
     private static XPath xpath = XPathFactory.newInstance().newXPath();
 

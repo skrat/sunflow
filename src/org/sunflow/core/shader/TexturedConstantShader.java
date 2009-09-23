@@ -7,7 +7,6 @@ import org.sunflow.core.Texture;
 import org.sunflow.core.TextureCache;
 import org.sunflow.core.shader.ConstantShader;
 import org.sunflow.image.Color;
-import org.sunflow.math.MathUtils;
 
 public class TexturedConstantShader extends ConstantShader {
 

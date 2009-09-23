@@ -3,3 +3,6 @@ release
 doc
 classes
 *.swp
+manifest.mf
+nbbuild.xml
+nbproject

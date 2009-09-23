@@ -250,10 +250,10 @@ final class RenderObjectMap {
         return (handle == null) ? null : handle.getLight();
     }
 
-    final Hashtable<String, RenderObjectType> inspect() {
-      Hashtable<String, RenderObjectType> r = new Hashtable<String, RenderObjectType>();
+    final Hashtable<String,RenderObject> inspect() {
+      Hashtable<String,RenderObject> r = new Hashtable<String,RenderObject>();
       for (FastHashMap.Entry<String, RenderObjectHandle> e : renderObjects) {
-          r.put( e.getKey(), e.getValue().type );
+          r.put( e.getKey(), e.getValue().getObject() );
       }
       return r;
     }
@@ -336,6 +336,10 @@ final class RenderObjectMap {
 
         private Options getOptions() {
             return (type == RenderObjectType.OPTIONS) ? (Options) obj : null;
+        }
+        
+        private RenderObject getObject() {
+            return obj;
         }
     }
 

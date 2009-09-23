@@ -2,13 +2,11 @@ package org.sunflow.core.shader;
 
 import org.sunflow.SunflowAPI;
 import org.sunflow.core.ParameterList;
-import org.sunflow.core.Ray;
 import org.sunflow.core.ShadingState;
 import org.sunflow.core.TextureCache;
 import org.sunflow.core.Texture;
 import org.sunflow.core.shader.AlphaShinyPhong;
 import org.sunflow.image.Color;
-import org.sunflow.math.Vector3;
 
 public class AlphaTexturedShinyPhong extends AlphaShinyPhong {
 
