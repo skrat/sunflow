@@ -737,7 +737,7 @@ public class DAEParser implements SceneParser {
 
             Element extraTechnique = null;
             try {
-                extraTechnique = (Element) xpath.evaluate(getEffectQuery(effectId)+"/extra/technique[@profile='sunflow']", doc, XPathConstants.NODE);
+                extraTechnique = (Element) xpath.evaluate(getEffectQuery(effectId)+"/extra/technique[@sid='sunflow']", doc, XPathConstants.NODE);
             } catch(Exception e) { }
 
             for (Node childNode = technique.getFirstChild(); childNode != null;) {
@@ -1165,11 +1165,8 @@ public class DAEParser implements SceneParser {
             childNode = nextChild;
         }
 
-        ListIterator li = nodeTransforms.listIterator();
-        while( li.hasNext() ) {
-            Matrix4 t = (Matrix4) li.next();
+        for (Matrix4 t: nodeTransforms)
             result = result.multiply(t);
-        }
 
         return result;
     }
