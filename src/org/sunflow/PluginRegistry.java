@@ -25,6 +25,7 @@ import org.sunflow.core.bucket.RandomBucketOrder;
 import org.sunflow.core.bucket.RowBucketOrder;
 import org.sunflow.core.bucket.SpiralBucketOrder;
 import org.sunflow.core.camera.FisheyeLens;
+import org.sunflow.core.camera.OrthogonalLens;
 import org.sunflow.core.camera.PinholeLens;
 import org.sunflow.core.camera.SphericalLens;
 import org.sunflow.core.camera.ThinLens;
@@ -51,13 +52,13 @@ import org.sunflow.core.light.TriangleMeshLight;
 import org.sunflow.core.modifiers.BumpMappingModifier;
 import org.sunflow.core.modifiers.NormalMapModifier;
 import org.sunflow.core.modifiers.PerlinModifier;
+import org.sunflow.core.parser.DAEParser;
 import org.sunflow.core.parser.RA2Parser;
 import org.sunflow.core.parser.RA3Parser;
 import org.sunflow.core.parser.SCAsciiParser;
 import org.sunflow.core.parser.SCBinaryParser;
 import org.sunflow.core.parser.SCParser;
 import org.sunflow.core.parser.ShaveRibParser;
-import org.sunflow.core.parser.DAEParser;
 import org.sunflow.core.photonmap.CausticPhotonMap;
 import org.sunflow.core.photonmap.GlobalPhotonMap;
 import org.sunflow.core.photonmap.GridPhotonMap;
@@ -114,8 +115,8 @@ import org.sunflow.core.shader.ViewGlobalPhotonsShader;
 import org.sunflow.core.shader.ViewIrradianceShader;
 import org.sunflow.core.shader.WireframeShader;
 import org.sunflow.core.tesselatable.BezierMesh;
-import org.sunflow.core.tesselatable.FileMesh;
 import org.sunflow.core.tesselatable.ColladaGeometry;
+import org.sunflow.core.tesselatable.FileMesh;
 import org.sunflow.core.tesselatable.Gumbo;
 import org.sunflow.core.tesselatable.Teapot;
 import org.sunflow.image.BitmapReader;
@@ -129,9 +130,9 @@ import org.sunflow.image.readers.TGABitmapReader;
 import org.sunflow.image.writers.EXRBitmapWriter;
 import org.sunflow.image.writers.HDRBitmapWriter;
 import org.sunflow.image.writers.IGIBitmapWriter;
+import org.sunflow.image.writers.JPGBitmapWriter;
 import org.sunflow.image.writers.PNGBitmapWriter;
 import org.sunflow.image.writers.TGABitmapWriter;
-import org.sunflow.image.writers.JPGBitmapWriter;
 import org.sunflow.system.Plugins;
 
 /**
@@ -258,6 +259,7 @@ public final class PluginRegistry {
         cameraLensPlugins.registerPlugin("thinlens", ThinLens.class);
         cameraLensPlugins.registerPlugin("fisheye", FisheyeLens.class);
         cameraLensPlugins.registerPlugin("spherical", SphericalLens.class);
+        cameraLensPlugins.registerPlugin("ortho", OrthogonalLens.class);
     }
 
     static {

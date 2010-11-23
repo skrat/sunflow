@@ -1,34 +1,36 @@
 package org.sunflow.core.parser;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.net.URI;
-import java.util.LinkedList;
-import java.util.ListIterator;
 import java.util.Iterator;
+import java.util.LinkedList;
 
-import javax.xml.xpath.*;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import org.xml.sax.SAXException;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NodeList;
-import org.w3c.dom.Node;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpressionException;
+import javax.xml.xpath.XPathFactory;
 
 import org.sunflow.SunflowAPI;
 import org.sunflow.SunflowAPIInterface;
 import org.sunflow.core.SceneParser;
-import org.sunflow.system.Timer;
-import org.sunflow.system.UI;
-import org.sunflow.system.UI.Module;
+import org.sunflow.image.Color;
 import org.sunflow.math.Matrix4;
 import org.sunflow.math.Point3;
 import org.sunflow.math.Vector3;
-import org.sunflow.image.Color;
+import org.sunflow.system.Timer;
+import org.sunflow.system.UI;
+import org.sunflow.system.UI.Module;
 import org.sunflow.util.FastHashMap;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
 public class DAEParser implements SceneParser {
 
@@ -418,7 +420,6 @@ public class DAEParser implements SceneParser {
             if (yfov != null)  {  fov += yfov;    }
             if (xfov != null && yfov != null)
                                {  fov = fov/2.0f; }
-            if (fov == 0.0f)   {  fov = 45.0f;    }  // default value
 
             try {
                 znear = ((float[]) optics.get("znear"))[0];
@@ -451,6 +452,8 @@ public class DAEParser implements SceneParser {
               api.parameter("focus.distance", fdist);
               api.parameter("lens.radius", lensr);
               api.camera(cameraId, "thinlens");
+            } else if (fov == 0f) {
+              api.camera(cameraId, "ortho");
             } else {
               api.camera(cameraId, "pinhole");
             }
