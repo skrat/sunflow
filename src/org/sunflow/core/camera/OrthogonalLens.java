@@ -7,14 +7,17 @@ import org.sunflow.core.Ray;
 
 public class OrthogonalLens implements CameraLens {
 
-    public boolean update(ParameterList pl, SunflowAPI api) {
-        return true;
+    private float scale;
+
+    public Ray getRay(float x, float y, int imageWidth, int imageHeight,
+            double lensX, double lensY, double time) {
+        return new Ray(x / scale - imageWidth / (2f * scale), y / scale
+                - imageHeight / (2f * scale), 0, 0, 0, -1);
     }
 
-    public Ray getRay(float x, float y, int imageWidth, int imageHeight, double lensX, double lensY, double time) {
-        float du = (2f * x) / (imageWidth - 1.0f);
-        float dv = (2f * y) / (imageHeight - 1.0f);
-        return new Ray(0, 0, 0, du, dv, -1);
+    public boolean update(ParameterList pl, SunflowAPI api) {
+        this.scale = pl.getFloat("scale", 1f);
+        return true;
     }
 
 }
