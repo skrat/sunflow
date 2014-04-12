@@ -297,7 +297,7 @@ public class DAEParser implements SceneParser {
                 try {
                     api.parameter("gi.path.samples", (int)((float[]) gi.get("samples"))[0]);
                 } catch(Exception e) { }
-            
+
             } else if (type.equals("fake")) {
 
                 api.parameter("gi.engine", "fake");
@@ -548,7 +548,7 @@ public class DAEParser implements SceneParser {
             parent.appendChild(cnode);
         }
     }
-    
+
     private void instantiateGeometry(Document doc, Element instance, Matrix4 transformation, String geometryId) {
         UI.printInfo(Module.GEOM, "Instantiating mesh: %s ...", geometryId);
 
@@ -635,7 +635,8 @@ public class DAEParser implements SceneParser {
             Integer numInputs = inputs.getLength();
             Integer vOffset = null,
                     nOffset = null,
-                    tOffset = null;
+                    tOffset = null,
+                    tCount  = null;
 
             int normalsType  = FACE;
             float[] vertices = null;
@@ -657,6 +658,8 @@ public class DAEParser implements SceneParser {
                 } else if ( semantic.equals("TEXCOORD") ) {
                     String texcoordData = xpath.evaluate(getGeometrySourceQuery(geometryId, sourceId), doc);
                     tOffset = Integer.parseInt(in.getAttribute("offset"));
+                    NodeList params = (NodeList) xpath.evaluate(getGeometrySourceParamsQuery(geometryId, sourceId), doc, XPathConstants.NODESET);
+                    tCount = params.getLength();
                     texcoord = parseFloats(texcoordData);
                 }
             }
@@ -706,8 +709,8 @@ public class DAEParser implements SceneParser {
                 for (int j=0; j < num; j++) {
                     int vix = Integer.parseInt(pointsStrings[j*numInputs]);    // vertex index
                     int tix = Integer.parseInt(pointsStrings[j*numInputs+tOffset]);  // texcoord index
-                    texcoordFloats[vix*2] = texcoord[tix*2];
-                    texcoordFloats[vix*2+1] = texcoord[tix*2+1];
+                    texcoordFloats[vix*2] = texcoord[tix*tCount];
+                    texcoordFloats[vix*2+1] = texcoord[tix*tCount+1];
                 }
             }
 
@@ -767,6 +770,7 @@ public class DAEParser implements SceneParser {
         if      (s == "phong")    { return new PhongShader(effectId,url,doc);    }
         else if (s == "lambert")  { return new LambertShader(effectId,url,doc);  }
         else if (s == "constant") { return new ConstantShader(effectId,url,doc); }
+        else if (s == "blinn")    { return new LambertShader(effectId,url,doc);  }
         return null;
     }
 
@@ -1228,7 +1232,7 @@ public class DAEParser implements SceneParser {
      **/
 
     private String getSceneId(Document doc) throws XPathExpressionException {
-        return xpath.evaluate("/COLLADA/scene/instance_visual_scene/@url", doc).substring(1); 
+        return xpath.evaluate("/COLLADA/scene/instance_visual_scene/@url", doc).substring(1);
     }
 
     private String getSceneQuery(String sceneId) {
@@ -1249,6 +1253,10 @@ public class DAEParser implements SceneParser {
 
     private String getGeometrySourceQuery(String geometryId, String inputId) {
         return "/COLLADA/library_geometries/geometry[@id='"+geometryId+"']/mesh/source[@id='"+inputId+"']/float_array/text()";
+    }
+
+    private String getGeometrySourceParamsQuery(String geometryId, String inputId) {
+        return "/COLLADA/library_geometries/geometry[@id='"+geometryId+"']/mesh/source[@id='"+inputId+"']/technique_common/accessor/param";
     }
 
     private String getMaterialQuery(String materialId) {
